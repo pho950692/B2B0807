@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}餘額核對 - fastB2B{% endblock %}
+
+{% block content %}
+<style>
+  .section {
+    margin: 30px auto;
+    max-width: 860px;
+  }
+
+  form input[type="text"] {
+    padding: 6px;
+    margin: 4px 8px 4px 4px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+
+  button {
+    padding: 6px 16px;
+    font-size: 14px;
+    background-color: #eee;
+    border: 1px solid #ccc;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background-color: #ccc;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+
+  table, th, td {
+    border: 1px solid #888;
+  }
+
+  th, td {
+    padding: 8px;
+    text-align: center;
+  }
+
+  th {
+    background-color: #f0f0f0;
+  }
+
+  hr {
+    border-top: 3px double #a0f0f0;
+    margin: 40px auto;
+    max-width: 860px;
+  }
+
+  .balance {
+    text-align: left;
+    font-weight: bold;
+    margin-top: 10px;
+  }
+</style>
+
+<div class="section">
+  <h2>餘額核對</h2>
+  <form method="post">
+    公司名稱：<input type="text" value="{{ company_name }}" readonly>
+    統一編號：<input type="text" value="{{ tax_id }}" readonly>
+    <button type="submit">查詢</button>
+  </form>
+</div>
+
+<hr>
+
+<div class="section">
+  <form method="post">
+    請輸入金額：<input type="text" name="amount">
+    <button type="submit">$存入金額</button>
+  </form>
+
+  <p class="balance">總餘額： ${{ "{:,}".format(total_balance) }}</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>交易日期</th>
+        <th>類別</th>
+        <th>金額</th>
+        <th>餘額</th>
+        <th>備註</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in transactions %}
+      <tr>
+        <td>{{ item.date }}</td>
+        <td>{{ item.type }}</td>
+        <td>{{ "{:,}".format(item.amount) }}</td>
+        <td>{{ "{:,}".format(item.balance) }}</td>
+        <td>{{ item.note }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

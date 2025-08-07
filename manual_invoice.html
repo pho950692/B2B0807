@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}人工登錄發票 - fastB2B{% endblock %}
+
+{% block content %}
+<div class="flex justify-center py-12 px-[5cm]">
+  <form method="POST" enctype="multipart/form-data"
+        class="w-full max-w-3xl bg-white border border-gray-300 rounded-xl shadow-lg p-10 text-xl space-y-10">
+
+    <h2 class="text-3xl font-bold text-blue-700 text-center mb-8">📝 人工登錄發票</h2>
+
+    <!-- 基本資料 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label for="company" class="block font-semibold mb-2">公司名稱：</label>
+        <input type="text" id="company" name="company" value="OpenAI" required
+               class="w-full border border-gray-400 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+      </div>
+      <div>
+        <label for="taxid" class="block font-semibold mb-2">統一編號：</label>
+        <input type="text" id="taxid" name="taxid" value="00518389" required
+               class="w-full border border-gray-400 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+      </div>
+    </div>
+
+    <!-- 發票資訊 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label for="invoice_num" class="block font-semibold mb-2">發票號碼：</label>
+        <input type="text" id="invoice_num" name="invoice_num" required
+               class="w-full border border-gray-400 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+      </div>
+      <div>
+        <label for="date" class="block font-semibold mb-2">日期：</label>
+        <input type="date" id="date" name="date" required
+               class="w-full border border-gray-400 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+      </div>
+    </div>
+
+    <!-- 金額 -->
+    <div>
+      <label for="amount" class="block font-semibold mb-2">總計金額：</label>
+      <input type="number" id="amount" name="amount" min="0" step="1" required
+             class="w-full border border-gray-400 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+    </div>
+
+    <!-- 檔案上傳區 -->
+    <div>
+      <label for="upload" class="block font-semibold mb-3">上傳發票附件檔案：</label>
+      <label for="upload"
+             class="flex flex-col items-center justify-center border-2 border-dashed border-gray-400 rounded-lg h-40 bg-gray-50 cursor-pointer hover:border-blue-500 transition">
+        <div class="flex flex-col items-center gap-2">
+          <i class="fas fa-cloud-upload-alt text-4xl text-gray-500"></i>
+          <span class="text-gray-600" id="file-name">尚未選擇檔案</span>
+        </div>
+      </label>
+      <input type="file" id="upload" name="upload" accept=".jpg,.jpeg,.png,.pdf"
+             class="hidden" onchange="updateFileName(this)" required>
+    </div>
+
+    <!-- 提交 -->
+    <div class="pt-6 flex justify-end">
+      <button type="submit"
+              class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg text-lg font-semibold flex items-center gap-2 shadow-md transition">
+        <i class="fas fa-paper-plane"></i> 送出
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  function updateFileName(input) {
+    const fileNameSpan = document.getElementById("file-name");
+    if (input.files.length > 0) {
+      fileNameSpan.textContent = input.files[0].name;
+    } else {
+      fileNameSpan.textContent = "尚未選擇檔案";
+    }
+  }
+</script>
+{% endblock %}

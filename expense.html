@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}廠商支出紀錄{% endblock %}
+
+{% block content %}
+  <h2>各廠商支出折線圖</h2>
+
+  <form id="filter-form">
+    <!-- 你的表單 -->
+  </form>
+
+  <div id="chart-container">
+    <canvas id="expenseChart"></canvas>
+  </div>
+
+  <button id="exportPdfBtn" style="margin-top: 20px;">匯出 PDF</button>
+
+  <script>
+    // 這裡放 Chart.js 與匯出 PDF 的 JavaScript 內容
+  </script>
+{% endblock %}

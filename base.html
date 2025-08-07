@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}fastB2B 系統{% endblock %}</title>
+
+  <!-- Tailwind + Icons -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- 自訂 CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+  {% block head_extra %}{% endblock %}
+</head>
+
+<body class="bg-gray-100 text-[18px] text-black min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="flex items-center justify-between bg-white px-6 py-4 border-b border-gray-300">
+    <div class="flex items-center space-x-4">
+      <img src="{{ url_for('static', filename='photo/logo.webp') }}" alt="logo" class="h-12">
+      <h1 class="text-3xl font-bold text-blue-700">fastB2B</h1>
+    </div>
+    <div class="text-lg font-semibold">
+      {% if 'user_id' in session %}
+        <span class="text-blue-700 mr-4">Hi, {{ session.username }}</span>
+        <a href="{{ url_for('logout') }}" class="text-red-600 hover:underline">登出</a>
+      {% else %}
+        <a href="{{ url_for('login') }}" class="text-blue-700 hover:underline mr-4">登入</a>
+        <a href="{{ url_for('register') }}" class="text-blue-700 hover:underline">註冊</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <!-- Navigation -->
+  <nav class="bg-gradient-to-r from-blue-600 to-blue-500 px-[5cm] py-1">
+    <ul class="flex justify-between">
+      {% for menu in [
+        {"title": "廠商管理", "items": [("vendor_manage", "公司資料維護"), ("add_vendor", "手動新增公司")]},
+        {"title": "發票管理", "items": [("search", "發票紀錄查詢")]},
+        {"title": "辨識發票", "items": [("manual_invoice", "手動新增發票"), ("invoice_auto", "自動辨識發票")]},
+        {"title": "帳務管理", "items": [("balance_check", "統計報表")]},
+        {"title": "其他", "items": [("home", "首頁"), ("preferences", "設定"), ("account_edit", "帳號資料修改")]}
+      ] %}
+      <li class="relative group">
+        <a href="#" class="block px-6 py-3 text-white font-semibold text-lg hover:bg-blue-800 rounded">
+          {{ menu.title }}
+        </a>
+        <ul class="dropdown-menu">
+          {% for endpoint, label in menu["items"] %}
+          <li>
+            <a href="{{ url_for(endpoint) }}"
+               class="{% if request.endpoint == endpoint %}active{% endif %}">
+              {{ label }}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </li>
+      {% endfor %}
+    </ul>
+  </nav>
+
+  <!-- Guided Tour Banner -->
+  <div class="bg-indigo-100 dark:bg-indigo-700 text-indigo-900 dark:text-white text-center py-2 px-4 text-sm animate__animated animate__fadeIn">
+    <i class="fas fa-info-circle mr-1"></i> 初次使用？<a href="#" class="underline font-semibold hover:text-indigo-700 dark:hover:text-yellow-200">點我展開新手導覽</a>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-green-500 text-white px-4 py-3 rounded shadow-lg hidden z-50 animate__animated animate__fadeInUp">
+    <i class="fas fa-check-circle mr-2"></i><span id="toast-message">操作成功！</span>
+  </div>
+
+  <!-- User Prompt -->
+  {% if 'user_id' in session %}
+  <div class="bg-blue-50 border border-blue-200 text-blue-700 py-3 px-6 text-center animate__animated animate__fadeIn dark:bg-blue-900 dark:text-blue-100">
+    <i class="fas fa-user-circle mr-2"></i>歡迎回來，{{ session.username }}！快速前往：
+    <a href="{{ url_for('invoice_auto') }}" class="underline hover:text-blue-900 mx-2"><i class="fas fa-file-upload"></i> 發票辨識</a> |
+    <a href="{{ url_for('search') }}" class="underline hover:text-blue-900 mx-2"><i class="fas fa-search"></i> 查詢發票</a>
+  </div>
+  {% endif %}
+
+  <!-- Main content -->
+  <main class="flex-grow w-full px-4 sm:px-6 lg:px-12 xl:px-20 py-8 animate__animated animate__fadeIn">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="mb-6">
+          {% for message in messages %}
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-2">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    // Toast utility
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      const msg = document.getElementById("toast-message");
+      msg.textContent = message;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
+    }
+  </script>
+</body>
+</html>

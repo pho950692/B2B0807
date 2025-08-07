@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}新增廠商 - fastB2B{% endblock %}
+
+{% block content %}
+<div class="flex justify-center py-10 px-4">
+  <div class="w-full max-w-3xl bg-white border border-gray-300 rounded-2xl shadow-lg px-8 sm:px-12 py-10">
+    <h2 class="text-3xl font-bold text-blue-700 mb-8 text-center flex items-center justify-center gap-2">
+      <i class="fas fa-plus-circle"></i>
+      新增廠商資訊
+    </h2>
+
+    <form method="POST" class="space-y-8">
+      <!-- 公司名稱 / 統一編號 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label for="company_name" class="block font-semibold mb-2">公司名稱：</label>
+          <input type="text" id="company_name" name="company_name" required
+            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+        </div>
+        <div>
+          <label for="tax_id" class="block font-semibold mb-2">統一編號：</label>
+          <input type="text" id="tax_id" name="tax_id"
+            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+        </div>
+      </div>
+
+      <!-- 聯絡電話 / 負責人 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label for="phone" class="block font-semibold mb-2">聯絡電話：</label>
+          <input type="text" id="phone" name="phone"
+            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+        </div>
+        <div>
+          <label for="owner" class="block font-semibold mb-2">負責人：</label>
+          <input type="text" id="owner" name="owner"
+            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+        </div>
+      </div>
+
+      <!-- 公司類別 -->
+      <div>
+        <label for="category" class="block font-semibold mb-2">公司類別：</label>
+        <input type="text" id="category" name="category"
+          class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:ring focus:ring-blue-300" />
+      </div>
+
+      <!-- 按鈕 -->
+      <div class="flex justify-end gap-4 pt-6">
+        <button type="button" onclick="location.href='{{ url_for('search') }}'"
+          class="flex items-center bg-gray-300 hover:bg-gray-400 text-black px-5 py-2.5 rounded-lg text-lg transition">
+          <i class="fas fa-times mr-2"></i> 取消
+        </button>
+        <button type="submit"
+          class="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-lg font-semibold transition">
+          <i class="fas fa-plus mr-2"></i> 新增
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

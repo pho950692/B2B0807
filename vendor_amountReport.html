@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}廠商支出紀錄{% endblock %}
+
+{% block content %}
+  <h2>各廠商發票查詢</h2>
+
+  <div style="max-width: 800px; margin: 0 auto; font-size: 16px;">
+    <div style="display: grid; grid-template-columns: 200px 1fr; row-gap: 20px; column-gap: 10px; align-items: center;">
+      <label for="vendor" style="text-align: right; font-weight: bold;">選擇廠商：</label>
+      <select id="vendor" style="padding: 6px 10px; font-size: 16px; width: 100%; box-sizing: border-box;">
+        <option>OpenAI</option>
+        <option>Google</option>
+        <option>Microsoft</option>
+      </select>
+
+      <label for="year" style="text-align: right; font-weight: bold;">選擇年份：</label>
+      <select id="year" style="padding: 6px 10px; font-size: 16px; width: 100%; box-sizing: border-box;">
+        <option>2025</option>
+        <option>2024</option>
+        <option>2023</option>
+        <option>2022</option>
+      </select>
+
+      <label style="text-align: right; font-weight: bold;">查詢時間區間：</label>
+      <div style="display: flex; align-items: center; gap: 20px;">
+        <label><input type="checkbox" name="period" value="month" /> 月</label>
+        <label><input type="checkbox" name="period" value="quarter" /> 季</label>
+        <label><input type="checkbox" name="period" value="year" /> 年</label>
+      </div>
+    </div>
+
+    <button class="btn" style="margin: 30px auto; display: block; padding: 8px 24px; font-size: 16px; background-color: #ddd; border: none; cursor: pointer; border-radius: 4px; transition: background-color 0.3s ease;">查詢</button>
+
+    <div style="margin-top: 40px; max-width: 600px; margin-left: auto; margin-right: auto;">
+      <h3 style="font-size: 20px; margin-bottom: 20px; text-align: center;">OpenAI 支出（年）：改折線圖</h3>
+
+      <div class="bar" style="background-color: black; height: 24px; margin-bottom: 10px; position: relative; border-radius: 3px; width: 90%;">
+        <span class="label" style="position: absolute; left: -60px; top: 2px; font-size: 14px; color: #000;">2025</span>
+        <span class="value" style="position: absolute; right: -80px; top: 2px; font-size: 14px; color: #000;">$50,000</span>
+      </div>
+      <div class="bar" style="background-color: black; height: 24px; margin-bottom: 10px; position: relative; border-radius: 3px; width: 60%;">
+        <span class="label" style="position: absolute; left: -60px; top: 2px; font-size: 14px; color: #000;">2024</span>
+        <span class="value" style="position: absolute; right: -80px; top: 2px; font-size: 14px; color: #000;">$30,000</span>
+      </div>
+      <div class="bar" style="background-color: black; height: 24px; margin-bottom: 10px; position: relative; border-radius: 3px; width: 40%;">
+        <span class="label" style="position: absolute; left: -60px; top: 2px; font-size: 14px; color: #000;">2023</span>
+        <span class="value" style="position: absolute; right: -80px; top: 2px; font-size: 14px; color: #000;">$20,000</span>
+      </div>
+    </div>
+
+    <button class="btn" style="margin: 30px auto; display: block; padding: 8px 24px; font-size: 16px; background-color: #ddd; border: none; cursor: pointer; border-radius: 4px; transition: background-color 0.3s ease;">匯出 PDF</button>
+  </div>
+{% endblock %}

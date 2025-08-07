@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+
+{% block title %}辨識發票 - fastB2B{% endblock %}
+
+{% block head_extra %}
+  {% if 'user_id' not in session %}
+    <script>alert('⚠️ 提醒：你尚未登入，辨識結果不會儲存到資料庫');</script>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="max-w-7xl mx-auto bg-white rounded-xl shadow-md p-8 mt-10 animate__animated animate__fadeIn text-base md:text-lg">
+  <h2 class="text-3xl font-bold text-blue-700 mb-6 flex items-center">
+    <i class="fas fa-file-invoice mr-3"></i> 自動辨識發票
+  </h2>
+  <p class="text-sm text-gray-500 mb-6">支援 JPG / PNG / PDF，多檔拖曳上傳，自動裁切與文字辨識。</p>
+
+  <div class="mb-6 flex flex-wrap gap-4 items-center">
+    <label for="company" class="font-semibold">選擇公司：</label>
+    <select id="company" class="border border-gray-300 rounded px-4 py-2 text-lg">
+      <option>OpenAI</option>
+      <option>Microsoft</option>
+    </select>
+
+    <!-- input 1：選取單一或多個圖片/PDF 檔案 -->
+    <input type="file" id="filePicker" class="hidden" multiple accept=".jpg,.jpeg,.png,.pdf,image/*" />
+
+    <!-- input 2：選取整個資料夾 -->
+    <input type="file" id="folderPicker" class="hidden" webkitdirectory directory accept=".jpg,.jpeg,.png,.pdf,image/*" />
+
+    <!-- 按鈕 -->
+    <button onclick="document.getElementById('filePicker').click()" class="bg-gray-200 hover:bg-gray-300 text-sm px-4 py-2 rounded">
+      <i class="fas fa-upload mr-1"></i> 選擇檔案
+    </button>
+    <button onclick="document.getElementById('folderPicker').click()" class="bg-gray-200 hover:bg-gray-300 text-sm px-4 py-2 rounded">
+      <i class="fas fa-folder-open mr-1"></i> 選擇資料夾
+    </button>
+
+    <a href="/camera" class="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded inline-flex items-center">
+      <i class="fas fa-camera mr-1"></i> 開啟鏡頭
+    </a>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full border border-gray-300 text-center text-base" id="fileTable">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="border px-4 py-2">檔案名稱</th>
+          <th class="border px-4 py-2">日期</th>
+          <th class="border px-4 py-2">操作</th>
+          <th class="border px-4 py-2">預覽</th>
+        </tr>
+      </thead>
+      <tbody id="fileTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="mt-6 flex justify-end gap-4">
+    <a href="/" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded text-base">回首頁</a>
+    <button onclick="clearAllFiles()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-base">全部清除</button>
+    <button onclick="submitFiles()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-base font-semibold">開始辨識</button>
+  </div>
+  <div id="pagination" class="mt-4 flex justify-center space-x-2"></div>
+
+  </div>
+
+  <div id="resultModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl w-[95%] max-w-[95%] max-h-[90vh] p-6 overflow-x-auto overflow-y-auto relative">
+      <h2 class="text-3xl font-bold mb-4"><i class="fas fa-edit mr-2"></i> 辨識結果編輯</h2>
+      <table class="w-full border border-gray-300 text-center text-base min-w-max">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="border px-4 py-2">圖片檔名</th>
+            <th class="border px-4 py-2">發票號碼</th>
+            <th class="border px-4 py-2">統一編號</th>
+            <th class="border px-4 py-2">日期</th>
+            <th class="border px-4 py-2">價格</th>
+            <th class="border px-4 py-2">賣方編號</th>
+            <th class="border px-4 py-2">公司名稱</th>
+            <th class="border px-4 py-2">公司地址</th>
+            <th class="border px-4 py-2">預覽</th>
+          </tr>
+        </thead>
+        <tbody id="modalResultsBody"></tbody>
+      </table>
+      <div class="mt-6 flex justify-end space-x-3">
+        <button id="reRecognizeBtn" class="bg-gray-300 hover:bg-gray-400 px-5 py-2 rounded text-base">重新辨識</button>
+        <button id="downloadBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded text-base">下載 CSV</button>
+        <button id="confirmBtn" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded text-base">確認儲存</button>
+        <button id="closeModalBtn" class="absolute top-4 right-4 text-3xl text-gray-600 hover:text-gray-900">&times;</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="imagePreviewModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="bg-white p-4 rounded shadow-lg relative max-w-4xl w-full">
+      <button onclick="closeImagePreview()" class="absolute top-2 right-3 text-3xl font-bold text-gray-600 hover:text-black">&times;</button>
+      <img id="previewImage" src="" alt="預覽圖片" class="mx-auto max-h-[80vh] object-contain" />
+    </div>
+  </div>
+</div>
+
+   <!-- JavaScript -->
+  <script>
+    const fileTableBody = document.getElementById('fileTableBody');
+    let selectedFiles = [];
+
+    function renderFileTable() {
+      fileTableBody.innerHTML = '';
+      const today = new Date().toISOString().split('T')[0];
+      selectedFiles.forEach((file, idx) => {
+        fileTableBody.innerHTML += `
+          <tr>
+            <td class="border px-4 py-2">${file.name}</td>
+            <td class="border px-4 py-2">${today}</td>
+            <td class="border px-4 py-2 space-x-2">
+              <label class="bg-yellow-400 hover:bg-yellow-500 text-white text-sm px-2 py-1 rounded cursor-pointer">
+                修改<input type="file" accept="image/*" class="hidden" onchange="replaceFile(event, ${idx})" />
+              </label>
+              <button onclick="removeFile(${idx})" class="bg-red-400 hover:bg-red-500 text-white text-sm px-2 py-1 rounded">刪除</button>
+            </td>
+            <td class="border px-4 py-2">
+              <button onclick="previewFile(${idx}, false)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded">預覽</button>
+            </td>
+          </tr>`;
+      });
+    }
+
+    function replaceFile(e, idx) {
+      if (e.target.files[0]) {
+        selectedFiles[idx] = e.target.files[0];
+        renderFileTable();
+      }
+    }
+
+    function removeFile(idx) {
+      selectedFiles.splice(idx, 1);
+      renderFileTable();
+    }
+
+    function handleFiles(fileList) {
+      selectedFiles = selectedFiles.concat(Array.from(fileList));
+      renderFileTable();
+    }
+
+    document.getElementById('filePicker').onchange = function () {
+      handleFiles(this.files);
+    };
+    document.getElementById('folderPicker').onchange = function () {
+      handleFiles(this.files);
+    };
+
+    function clearAllFiles() {
+      selectedFiles = [];
+      recognizedResults = [];
+      document.getElementById('filePicker').value = '';
+      document.getElementById('folderPicker').value = '';
+      renderFileTable();
+      closeModal();
+    }
+
+    let currentPage = 1;
+const rowsPerPage = 10;
+
+function renderFileTable() {
+  fileTableBody.innerHTML = '';
+  const today = new Date().toISOString().split('T')[0];
+  
+  const start = (currentPage - 1) * rowsPerPage;
+  const end = start + rowsPerPage;
+  const pageFiles = selectedFiles.slice(start, end);
+
+  pageFiles.forEach((file, idx) => {
+    fileTableBody.innerHTML += `
+      <tr>
+        <td class="border px-4 py-2">${file.name}</td>
+        <td class="border px-4 py-2">${today}</td>
+        <td class="border px-4 py-2 space-x-2">
+          <label class="bg-yellow-400 hover:bg-yellow-500 text-white text-sm px-2 py-1 rounded cursor-pointer">
+            修改<input type="file" accept="image/*" class="hidden" onchange="replaceFile(event, ${start + idx})" />
+          </label>
+          <button onclick="removeFile(${start + idx})" class="bg-red-400 hover:bg-red-500 text-white text-sm px-2 py-1 rounded">刪除</button>
+        </td>
+        <td class="border px-4 py-2">
+          <button onclick="previewFile(${start + idx}, false)" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded">預覽</button>
+        </td>
+      </tr>`;
+  });
+
+  renderPagination();
+}
+
+function renderPagination() {
+  const pageCount = Math.ceil(selectedFiles.length / rowsPerPage);
+  const pagination = document.getElementById('pagination');
+  pagination.innerHTML = '';
+
+  for (let i = 1; i <= pageCount; i++) {
+    pagination.innerHTML += `
+      <button onclick="changePage(${i})" class="${i === currentPage ? 'bg-blue-600 text-white' : 'bg-gray-200'} px-3 py-1 rounded">
+        ${i}
+      </button>`;
+  }
+}
+
+function changePage(page) {
+  currentPage = page;
+  renderFileTable();
+}
+
+
+    async function submitFiles() {
+      if (selectedFiles.length === 0) {
+        alert('請先選擇檔案');
+        return;
+      }
+
+      const formData = new FormData();
+      selectedFiles.forEach((file) => formData.append('files', file));
+
+      try {
+        const response = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          alert('上傳失敗: ' + (errorData.error || response.statusText));
+          return;
+        }
+
+        recognizedResults = await response.json();
+
+        if (!recognizedResults || recognizedResults.length === 0) {
+          alert('沒有辨識結果');
+          return;
+        }
+
+        showRecognizeResults(recognizedResults);
+
+      } catch (err) {
+        alert('發生錯誤: ' + err.message);
+      }
+    }
+
+    function showRecognizeResults(results) {
+      modalResultsBody.innerHTML = '';
+
+      results.forEach((result, idx) => {
+        const filename = result.imageUrl.split('/').pop();
+        modalResultsBody.innerHTML += `
+          <tr>
+            <td class="border px-4 py-2">${filename}</td>
+            <td class="border px-4 py-2"><input type="text" value="${result.num || ''}" onchange="recognizedResults[${idx}].num=this.value" class="w-full text-center" /></td>
+            <td class="border px-4 py-2"><input type="text" value="${result.snu || ''}" onchange="recognizedResults[${idx}].snu=this.value" class="w-full text-center" /></td>
+            <td class="border px-4 py-2"><input type="text" value="${result.data || ''}" onchange="recognizedResults[${idx}].data=this.value" class="w-full text-center" /></td>
+            <td class="border px-4 py-2"><input type="text" value="${result.price || ''}" onchange="recognizedResults[${idx}].price=this.value" class="w-full text-center" /></td>
+            <td class="border px-4 py-2"><input type="text" value="${result.bnu || ''}" onchange="recognizedResults[${idx}].bnu=this.value" class="w-full text-center" /></td>
+            <td class="border px-4 py-2"><input type="text" value="${result.name || ''}" onchange="recognizedResults[${idx}].name=this.value" class="w-full text-center" /></td>
+            <td class="border px-4 py-2"><input type="text" value="${result.add || ''}" onchange="recognizedResults[${idx}].add=this.value" class="w-full text-center" /></td>
+            <td class="border px-4 py-2">
+              <a href="/result/${filename}" target="_blank" class="bg-purple-600 hover:bg-purple-700 text-white text-sm px-2 py-1 rounded">詳細預覽</a>
+            </td>
+          </tr>`;
+      });
+
+      resultModal.classList.remove('hidden');
+    }
+
+    function closeModal() {
+      resultModal.classList.add('hidden');
+    }
+
+    document.getElementById('closeModalBtn').onclick = closeModal;
+
+    document.getElementById('downloadBtn').onclick = () => {
+      if (recognizedResults.length === 0) {
+        alert('無辨識結果可下載');
+        return;
+      }
+
+      const rows = [
+        ['發票號碼', '統一編號', '日期', '價格', '賣方編號', '公司名稱', '公司地址']
+      ];
+
+      recognizedResults.forEach(r => {
+        rows.push([
+          r.num || '',
+          r.snu || '',
+          r.data || '',
+          r.price || '',
+          r.bnu || '',
+          r.name || '',
+          r.add || ''
+        ]);
+      });
+
+      const csvContent = rows.map(row => row.join(',')).join('\n');
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '辨識結果.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
+    document.getElementById('confirmBtn').onclick = async () => {
+      const isLoggedIn = {{ 'true' if 'user_id' in session else 'false' }};
+      if (!isLoggedIn) {
+        alert('⚠️ 請先登入，才可儲存資料');
+        return;
+      }
+
+      try {
+        const response = await fetch('/confirm_result', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(recognizedResults)
+        });
+
+        const res = await response.json();
+
+        if (response.ok) {
+          alert('✅ 資料已成功寫入資料庫');
+          closeModal();
+          resetFileList();
+        } else {
+          alert('❌ 儲存失敗：' + res.error);
+        }
+      } catch (err) {
+        alert('❌ 發生錯誤：' + err.message);
+      }
+    };
+
+    function previewFile(idx, isRecognized) {
+      const src = isRecognized ? recognizedResults[idx]?.imageUrl : URL.createObjectURL(selectedFiles[idx]);
+      if (!src) return alert('找不到圖片或路徑錯誤');
+
+      const modal = document.getElementById("imagePreviewModal");
+      const img = document.getElementById("previewImage");
+
+      img.src = src;
+      modal.classList.remove("hidden");
+    }
+
+    function closeImagePreview() {
+      const modal = document.getElementById("imagePreviewModal");
+      const img = document.getElementById("previewImage");
+      img.src = "";
+      modal.classList.add("hidden");
+    }
+  </script>
+</div>
+</script>
+{% endblock %}

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>數位發票辨識系統 - 登入</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: 'Microsoft JhengHei', sans-serif;
+      background-color: #fff;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .wrapper {
+      text-align: center;
+    }
+
+    .logo {
+      width: 250px;
+      margin-bottom: 30px;
+    }
+
+    h2 {
+      color: #2b3990;
+      font-size: 40px;
+      margin: 15px 0 10px 0;
+    }
+
+    p.subtitle {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 40px;
+    }
+
+    .form-container {
+      width: 460px;
+      padding: 40px;
+      border: 2px solid #ccc;
+      border-radius: 15px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+      background-color: #f9f9f9;
+      margin: 0 auto;
+    }
+
+    label {
+      display: block;
+      margin-top: 25px;
+      font-size: 22px;
+      font-weight: bold;
+      text-align: left;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 14px;
+      font-size: 20px;
+      margin-top: 10px;
+      box-sizing: border-box;
+    }
+
+    .options {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+      font-size: 22px;
+    }
+
+    .options label {
+      margin: 0;
+      font-weight: normal;
+      font-size: 22px;
+    }
+
+    .options a {
+      color: #2b3990;
+      text-decoration: none;
+      font-size: 22px;
+    }
+
+    .options a:hover {
+      text-decoration: underline;
+    }
+
+    .login-btn {
+      width: 100%;
+      margin-top: 30px;
+      background-color: #0074a2;
+      color: white;
+      border: none;
+      padding: 14px;
+      font-size: 22px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .login-btn:hover {
+      background-color: #005f85;
+    }
+
+    .register {
+      margin-top: 25px;
+      text-align: center;
+    }
+
+    .register a {
+      color: red;
+      font-size: 20px;
+      text-decoration: none;
+    }
+
+    .flash-message {
+      background-color: #fdecea;
+      color: #b91c1c;
+      border-left: 4px solid #f87171;
+      padding: 12px;
+      font-size: 18px;
+      margin-bottom: 20px;
+      text-align: left;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="logo">
+    <h2>智慧發票辨識系統</h2>
+    <p class="subtitle">Invoice Recognition System</p>
+
+    <div class="form-container">
+
+      <!-- 顯示 flash 訊息 -->
+      {% with messages = get_flashed_messages() %}
+        {% if messages %}
+          {% for message in messages %}
+            <div class="flash-message">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="POST" action="/login">
+        <label for="username">帳號：</label>
+        <input type="text" id="username" name="username" required>
+
+        <label for="password">密碼：</label>
+        <input type="password" id="password" name="password" required>
+
+        <div class="options">
+          <label><input type="checkbox" name="remember"> 記住本次登入</label>
+          <a href="/forgot">忘記密碼？</a>
+        </div>
+
+        <button type="submit" class="login-btn">登入</button>
+      </form>
+
+      <div class="register">
+        <a href="/register">註冊帳號</a>
+      </div>
+
+      <div class="home" style="margin-top: 12px; text-align: center;">
+        <a href="/" style="color: #2b3990; font-size: 20px; text-decoration: none;">回首頁</a>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

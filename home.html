@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}fastB2B 首頁{% endblock %}
+
+{% block content %}
+<div class="p-10 max-w-5xl mx-auto">
+  <h1 class="text-5xl font-bold text-blue-800 dark:text-blue-300 mb-8 text-center animate__animated animate__fadeInDown">
+    歡迎來到 fastB2B 發票辨識系統
+  </h1>
+
+  <p class="text-xl text-gray-800 dark:text-gray-200 mb-8 text-center leading-relaxed animate__animated animate__fadeIn">
+    fastB2B 是專為企業打造的智能發票辨識系統，結合 AI 技術自動處理發票資訊，
+    有效降低人為輸入錯誤、提升作業效率，加速 ERP 整合。
+  </p>
+
+  <!-- 功能特色 -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow hover:shadow-md transition animate__animated animate__fadeInUp">
+      <h3 class="text-2xl font-semibold mb-2 text-blue-700 dark:text-blue-400">
+        <i class="fas fa-file-upload mr-2"></i>發票上傳與辨識
+      </h3>
+      <p class="text-base text-gray-700 dark:text-gray-300">支援多種格式（JPG / PNG / PDF），系統自動偵測欄位並進行文字辨識。</p>
+      <a href="{{ url_for('invoice_auto') }}" class="inline-block mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-base">立即使用</a>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow hover:shadow-md transition animate__animated animate__fadeInUp">
+      <h3 class="text-2xl font-semibold mb-2 text-blue-700 dark:text-blue-400">
+        <i class="fas fa-building mr-2"></i>廠商與帳務資料管理
+      </h3>
+      <p class="text-base text-gray-700 dark:text-gray-300">整合廠商統編、賣方資訊與發票紀錄，方便後續對帳與財務處理。</p>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow hover:shadow-md transition animate__animated animate__fadeInUp">
+      <h3 class="text-2xl font-semibold mb-2 text-blue-700 dark:text-blue-400">
+        <i class="fas fa-chart-line mr-2"></i>數據匯出與報表整合
+      </h3>
+      <p class="text-base text-gray-700 dark:text-gray-300">辨識結果可匯出為 CSV，便於與 ERP、會計系統銜接，提升整體數位化效率。</p>
+    </div>
+  </div>
+
+  <!-- 專題與技術說明 -->
+  <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md animate__animated animate__fadeIn">
+    <h3 class="text-2xl font-bold text-blue-700 dark:text-blue-300 mb-6">
+      <i class="fas fa-microchip mr-2"></i>專題技術說明
+    </h3>
+    <p class="text-lg text-gray-800 dark:text-gray-300 mb-4 leading-relaxed">
+      本專題整合人工智慧與網頁應用技術，讓使用者能夠輕鬆上傳發票圖片或 PDF，系統自動完成辨識、欄位裁切、內容輸出。
+    </p>
+    <ul class="list-disc pl-6 text-lg text-gray-700 dark:text-gray-300 space-y-3">
+      <li><strong>YOLOv5：</strong> 深度學習模型，負責定位發票內重要欄位位置（如發票號碼、日期、統一編號等）。</li>
+      <li><strong>Tesseract OCR：</strong> 將欄位影像轉換為可編輯文字資料，用於後續系統儲存與對接。</li>
+      <li><strong>Flask：</strong> 使用 Python 建構的後端伺服器架構，負責處理檔案上傳、AI 模型呼叫與網頁互動。</li>
+    </ul>
+    <p class="mt-6 text-lg text-gray-700 dark:text-gray-300">
+      我們的目標是打造一套真正能協助企業解決發票處理痛點的智能系統，從手動轉為 AI 自動化，是未來趨勢。
+    </p>
+  </div>
+</div>
+{% endblock %}

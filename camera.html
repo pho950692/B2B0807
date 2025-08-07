@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>快速拍照辨識</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+</head>
+<body class="bg-gray-100">
+  <div class="w-full min-h-screen p-4">
+    <h2 class="text-2xl font-bold text-blue-700 mb-4 flex items-center">
+      <i class="fas fa-camera mr-2"></i> 快速拍照辨識
+    </h2>
+
+    <div class="flex flex-col md:flex-row gap-4 h-[80vh]">
+      <!-- 左側：相機或截圖 -->
+      <div class="flex-1 h-full flex flex-col">
+        <div id="cameraWrapper" class="w-full flex-grow relative">
+          <video id="cameraPreview" autoplay playsinline class="w-full h-full object-contain rounded"></video>
+          <img id="snapshotImage" class="w-full h-full object-contain rounded hidden" />
+        </div>
+        <!-- 拍照按鈕 -->
+        <div class="mt-2 flex justify-center">
+          <button onclick="takeSnapshot()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+            拍照辨識
+          </button>
+        </div>
+      </div>
+
+      <!-- 右側：辨識結果 -->
+      <div class="flex-1 overflow-x-auto">
+        <table class="w-full border border-gray-300 text-center text-sm">
+          <thead class="bg-gray-100">
+            <tr>
+              <th class="border px-2 py-1">發票號碼</th>
+              <th class="border px-2 py-1">統一編號</th>
+              <th class="border px-2 py-1">日期</th>
+              <th class="border px-2 py-1">價格</th>
+              <th class="border px-2 py-1">賣方編號</th>
+              <th class="border px-2 py-1">公司名稱</th>
+              <th class="border px-2 py-1">公司地址</th>
+            </tr>
+          </thead>
+          <tbody id="cameraResultBody"></tbody>
+        </table>
+
+        <!-- 底部按鈕 -->
+        <div class="mt-4 flex justify-end gap-2">
+          <a href="/auto_inv" class="bg-gray-300 hover:bg-gray-400 text-black px-4 py-2 rounded">返回辨識畫面</a>
+          <button onclick="downloadCSV()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">下載 CSV</button>
+          <button onclick="resetRecognition()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">重新辨識</button>
+          <button onclick="continueRecognition()" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">繼續辨識</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+let cameraStream;
+let recognitionHistory = [];
+
+async function openCamera() {
+  const video = document.getElementById("cameraPreview");
+  const snapshot = document.getElementById("snapshotImage");
+  snapshot.classList.add("hidden");
+  video.classList.remove("hidden");
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = cameraStream;
+  } catch (err) {
+    alert("無法開啟攝影機: " + err.message);
+  }
+}
+
+function restartCamera() {
+  const video = document.getElementById("cameraPreview");
+  const snapshot = document.getElementById("snapshotImage");
+  snapshot.classList.add("hidden");
+  video.classList.remove("hidden");
+  openCamera();
+}
+
+function resetRecognition() {
+  recognitionHistory = [];
+  showCameraResult(recognitionHistory);
+  restartCamera();
+}
+
+async function takeSnapshot() {
+  const video = document.getElementById("cameraPreview");
+  const canvas = document.createElement("canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+
+  canvas.toBlob(async (blob) => {
+    const formData = new FormData();
+    formData.append("file", blob, "snapshot.jpg");
+
+    try {
+      const response = await fetch("/upload_camera", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        alert("辨識失敗: " + err);
+        return;
+      }
+
+      const result = await response.json();
+      if (result[0]) {
+        recognitionHistory.push(result[0]);
+      }
+      showCameraResult(recognitionHistory);
+
+      const snapshot = document.getElementById("snapshotImage");
+      const canvasUrl = canvas.toDataURL("image/jpeg");
+      snapshot.src = canvasUrl;
+      snapshot.classList.remove("hidden");
+      video.classList.add("hidden");
+
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    } catch (err) {
+      alert("發生錯誤: " + err.message);
+    }
+  }, "image/jpeg");
+}
+
+function showCameraResult(dataList) {
+  const body = document.getElementById("cameraResultBody");
+  body.innerHTML = dataList.map(data => `
+    <tr>
+      <td class="border px-2 py-1">${data.num || ''}</td>
+      <td class="border px-2 py-1">${data.snu || ''}</td>
+      <td class="border px-2 py-1">${data.data || ''}</td>
+      <td class="border px-2 py-1">${data.price || ''}</td>
+      <td class="border px-2 py-1">${data.bnu || ''}</td>
+      <td class="border px-2 py-1">${data.name || ''}</td>
+      <td class="border px-2 py-1">${data.add || ''}</td>
+    </tr>`).join('');
+}
+
+function downloadCSV() {
+  const rows = [
+    ["發票號碼", "統一編號", "日期", "價格", "賣方編號", "公司名稱", "公司地址"],
+    ...recognitionHistory.map(data => [
+      data.num || '',
+      data.snu || '',
+      data.data || '',
+      data.price || '',
+      data.bnu || '',
+      data.name || '',
+      data.add || ''
+    ])
+  ];
+  const csvContent = rows.map(row => row.join(",")).join("\n");
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "辨識結果.csv";
+  a.click();
+}
+
+function continueRecognition() {
+  restartCamera();
+}
+
+openCamera();
+</script>
+</body>
+</html>

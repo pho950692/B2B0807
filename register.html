@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>申請帳號</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .char-count {
+            font-size: 14px;
+            color: #666;
+        }
+        .textarea-wrapper {
+            position: relative;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container mt-5">
+        <h2 class="text-center mb-4">申請帳號</h2>
+        <form method="POST" action="/register" class="mx-auto" style="max-width: 700px;">
+
+            <div class="row">
+                <div class="mb-3 col-md-6">
+                    <label for="username" class="form-label">帳號</label>
+                    <input type="text" class="form-control" id="username" name="username" required maxlength="12" minlength="8"
+                        pattern="^[a-zA-Z0-9]{8,12}$">
+                    <div class="form-text">請輸入 8~12 碼英數字組合</div>
+                </div>
+                <div class="mb-3 col-md-6">
+                    <label for="password" class="form-label">密碼</label>
+                    <input type="password" class="form-control" id="password" name="password" required minlength="8" maxlength="16"
+                        pattern="^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,16}$">
+                    <div class="form-text">請輸入包含英數字的密碼（8字以上，16以下）</div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="mb-3 col-md-6">
+                    <label for="name" class="form-label">姓名</label>
+                    <input type="text" class="form-control" id="name" name="name" maxlength="100">
+                </div>
+                <div class="mb-3 col-md-6">
+                    <label for="email" class="form-label">電子郵件</label>
+                    <input type="email" class="form-control" id="email" name="email">
+                    <div class="form-text">(請輸入有效 Email，如：name@example.com)</div>
+                </div>
+            </div>
+
+            <hr>
+            <h5 class="text-center">公司資料</h5>
+            <div class="row">
+                <div class="mb-3 col-md-6">
+                    <label for="company_name" class="form-label">公司名稱</label>
+                    <input type="text" class="form-control" id="company_name" name="company_name" maxlength="100">
+                </div>
+                <div class="mb-3 col-md-6">
+                    <label for="tax_id" class="form-label">統一編號</label>
+                    <input type="text" class="form-control" id="tax_id" name="tax_id" maxlength="20">
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="mb-3 col-md-6">
+                    <label for="phone" class="form-label">電話</label>
+                    <input type="text" class="form-control" id="phone" name="phone" maxlength="20" placeholder="市話或手機">
+                    <div class="form-text">(如：02-xxxxxxx 或 09xx-xxxxxx)</div>
+                </div>
+                <div class="mb-3 col-md-6">
+                    <label for="owner" class="form-label">負責人</label>
+                    <input type="text" class="form-control" id="owner" name="owner" maxlength="50">
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label for="address" class="form-label">廠商地址</label>
+                <textarea class="form-control" id="address" name="address" rows="2"></textarea>
+            </div>
+
+            <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <label for="description" class="form-label">廠商說明簡介</label>
+                    <div class="char-count" id="charCount">目前已輸入 0 / 200 字</div>
+                </div>
+                <textarea class="form-control" id="description" name="description" rows="3" maxlength="200"></textarea>
+            </div>
+
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+            <div class="alert alert-danger">
+                {{ messages[0] }}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            <button type="submit" class="btn btn-success w-100">申請帳號</button>
+
+            <!-- 返回登入按鈕 -->
+            <div class="text-center mt-3">
+                  <a href="{{ url_for('login') }}" class="btn btn-secondary">返回登入頁</a>
+
+            </div>
+
+
+        </form>
+    </div>
+
+    <!-- 字數即時顯示 Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const textarea = document.getElementById('description');
+            const charCount = document.getElementById('charCount');
+
+            function updateCharCount() {
+                const count = textarea.value.length;
+                charCount.textContent = `目前已輸入 ${count} / 200 字`;
+            }
+
+            textarea.addEventListener('input', updateCharCount);
+            updateCharCount(); // 初始化
+        });
+    </script>
+</body>
+</html>

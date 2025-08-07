@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}發票查詢記錄 - fastB2B{% endblock %}
+
+{% block content %}
+<div class="form-container">
+  <h3>發票記錄查詢</h3>
+
+  <form method="GET" class="search-form">
+    <label>公司名稱：
+      <input type="text" name="company_name" value="{{ company_name or '' }}">
+    </label>
+    <label>統一編號：
+      <input type="text" name="tax_id" value="{{ tax_id or '' }}">
+    </label>
+    <label>日期區間：
+      <input type="date" name="start_date" value="{{ start_date or '' }}"> ~
+      <input type="date" name="end_date" value="{{ end_date or '' }}">
+    </label>
+    <button type="submit">查詢</button>
+  </form>
+
+  {% if results %}
+  <table>
+    <thead>
+      <tr>
+        <th>廠商名稱</th>
+        <th>廠商編號</th>
+        <th>發票號碼</th>
+        <th>金額</th>
+        <th>發票日期</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in results %}
+      <tr>
+        <td>{{ row.company_name }}</td>
+        <td>{{ row.company_id }}</td>
+        <td>{{ row.invoice_number }}</td>
+        <td>{{ "{:,}".format(row.amount) }}</td>
+        <td>{{ row.date }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    {% if request.args %}
+    <p>🔍 查無相關發票資料</p>
+    {% endif %}
+  {% endif %}
+
+  <div class="actions" style="margin-top: 20px;">
+    <button type="button" onclick="location.href='{{ url_for('search') }}'">返回首頁</button>
+    <!-- 此為展示用途，如有需確認後送出其他動作，可用另一 form 包起來 -->
+  </div>
+
+  <div class="note" style="margin-top: 10px; color: red;">
+    ▲ 僅能修改七天內的資料
+  </div>
+</div>
+{% endblock %}

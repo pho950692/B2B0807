@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}帳號與廠商資料修改 - fastB2B{% endblock %}
+
+{% block content %}
+<div class="flex justify-center pt-10 pb-20">
+  <form method="POST" action="{{ url_for('account_edit') }}" class="w-full max-w-4xl space-y-10 text-xl bg-white border border-gray-300 shadow-lg rounded-xl p-10">
+
+    <!-- 帳號修改 -->
+    <h2 class="text-2xl font-bold text-blue-700">帳號修改</h2>
+    
+    <div class="space-y-6">
+      <div>
+        <label for="oldPwd" class="block font-semibold mb-2">舊密碼：</label>
+        <input type="password" id="oldPwd" name="oldPwd" required class="w-full border border-gray-400 rounded px-4 py-3 text-lg" />
+      </div>
+      <div>
+        <label for="newPwd" class="block font-semibold mb-2">新密碼：</label>
+        <input type="password" id="newPwd" name="newPwd" oninput="checkStrength()" class="w-full border border-gray-400 rounded px-4 py-3 text-lg" />
+        <div class="mt-2 text-sm text-gray-600">密碼強度：<span id="strengthText" class="font-medium">—</span></div>
+        <div class="text-sm text-red-500 mt-1">⚠️ 請輸入包含英數字的密碼（8字以上）</div>
+      </div>
+      <div>
+        <label for="confirmPwd" class="block font-semibold mb-2">確認密碼：</label>
+        <input type="password" id="confirmPwd" name="confirmPwd" oninput="checkMatch()" class="w-full border border-gray-400 rounded px-4 py-3 text-lg" />
+        <div class="mt-2 text-green-600 font-medium" id="matchResult"></div>
+      </div>
+    </div>
+
+    <!-- 廠商資料修改 -->
+    <h2 class="text-2xl font-bold text-blue-700 pt-6">廠商資料修改</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label for="company_name" class="block font-semibold mb-2">公司名稱：</label>
+        <input type="text" id="company_name" name="company_name" value="{{ company.co_na if company else '' }}" class="w-full border border-gray-400 rounded px-4 py-3 text-lg" />
+      </div>
+      <div>
+        <label for="tax_id" class="block font-semibold mb-2">統一編號：</label>
+        <input type="text" id="tax_id" name="tax_id" value="{{ company.tax_id if company else '' }}" class="w-full border border-gray-400 rounded px-4 py-3 text-lg" />
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <label for="phone" class="block font-semibold mb-2">電話：</label>
+        <input type="text" id="phone" name="phone" value="{{ company.pho if company else '' }}" class="w-full border border-gray-400 rounded px-4 py-3 text-lg" />
+        <div class="text-sm text-gray-500 mt-1">(可填市話或手機，如：02-xxxxxxx 或 09xx-xxxxxx)</div>
+      </div>
+      <div>
+        <label for="owner" class="block font-semibold mb-2">負責人：</label>
+        <input type="text" id="owner" name="owner" value="{{ company.oer if company else '' }}" class="w-full border border-gray-400 rounded px-4 py-3 text-lg" />
+      </div>
+    </div>
+
+    <div>
+      <label for="email" class="block font-semibold mb-2">Email：</label>
+      <input type="email" id="email" name="email" value="{{ user.mail if user else '' }}" class="w-full border border-gray-400 rounded px-4 py-3 text-lg" />
+      <div class="text-sm text-red-500 mt-1">⚠️ 請輸入有效 Email，如：name@example.com</div>
+    </div>
+
+    <div>
+      <label for="description" class="block font-semibold mb-2">說明簡介：</label>
+      <textarea id="description" name="description" rows="4" maxlength="200" oninput="updateCount()" class="w-full border border-gray-400 rounded px-4 py-3 text-lg resize-none">{{ company.desc if company else '' }}</textarea>
+      <div class="text-sm text-gray-600 mt-1" id="introHint">
+        (請輸入簡要介紹，如服務內容、主要商品等，限 200 字內，目前已輸入 {{ company.desc|length if company and company.desc else 0 }} 字)
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-4 pt-6">
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded text-lg font-semibold">儲存</button>
+      <button type="button" onclick="window.location.href='{{ url_for('search') }}'" class="bg-gray-300 hover:bg-gray-400 text-black px-6 py-3 rounded text-lg">取消</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  function checkStrength() {
+    const pwd = document.getElementById("newPwd").value;
+    const strengthText = document.getElementById("strengthText");
+    let strength = 0;
+    if (pwd.length >= 8) strength++;
+    if (/[A-Z]/.test(pwd)) strength++;
+    if (/[a-z]/.test(pwd)) strength++;
+    if (/[0-9]/.test(pwd)) strength++;
+    if (/[^a-zA-Z0-9]/.test(pwd)) strength++;
+    const levels = ["✩✩✩✩✩（極弱）", "★✩✩✩✩（弱）", "★★✩✩✩（普通）", "★★★✩✩（中）", "★★★★✩（強）", "★★★★★（很強）"];
+    strengthText.textContent = levels[strength];
+  }
+
+  function checkMatch() {
+    const newPwd = document.getElementById("newPwd").value;
+    const confirmPwd = document.getElementById("confirmPwd").value;
+    const result = document.getElementById("matchResult");
+    if (newPwd && confirmPwd && newPwd === confirmPwd) {
+      result.textContent = "✅ 密碼一致";
+    } else {
+      result.textContent = "";
+    }
+  }
+
+  function updateCount() {
+    const intro = document.getElementById("description");
+    const hint = document.getElementById("introHint");
+    const len = intro.value.length;
+    hint.textContent = `(請輸入簡要介紹，如服務內容、主要商品等，限 200 字內，目前已輸入 ${len} 字)`;
+  }
+</script>
+{% endblock %}
