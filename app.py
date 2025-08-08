@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session,jsonify, render_template, send_from_directory
+from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify, render_template, send_from_directory
 import mysql.connector
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import db_config
@@ -15,6 +15,19 @@ import uuid
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'  # 建議改成環境變數或更強隨機字串
+
+# 在檔案 import 後、app = Flask(__name__) 之後放
+from collections import defaultdict
+from datetime import datetime
+
+PROGRESS = defaultdict(lambda: {
+    "total": 0,        # 總數
+    "done": 0,         # 已完成
+    "started_at": None,
+    "finished": False, # 是否已完成
+    "error": ""        # 批次錯誤訊息（選用）
+})
+
 
 import os
 
@@ -60,6 +73,22 @@ def get_db_connection():
 @app.route('/')
 def home():
     return render_template('home.html')
+
+@app.route('/progress/<job_id>')
+def get_progress(job_id):
+    if job_id not in PROGRESS:
+        return jsonify({"exists": False}), 404
+    p = PROGRESS[job_id]
+    percent = 0 if p["total"] == 0 else int(p["done"] * 100 / p["total"])
+    return jsonify({
+        "exists": True,
+        "total": p["total"],
+        "done": p["done"],
+        "percent": percent,
+        "finished": p["finished"],
+        "error": p["error"]
+    })
+
 
 
 def allowed_file(filename):
@@ -119,6 +148,7 @@ def search():
                            date_range=date_range)
 
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -154,6 +184,7 @@ def login():
             return redirect(url_for('login'))
 
     return render_template('login.html')
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -315,7 +346,8 @@ def add_vendor():
         tax_id = request.form.get('tax_id', '').strip()
         pho = request.form.get('phone', '').strip()
         oer = request.form.get('owner', '').strip()
-        category = request.form.get('category', '').strip()
+        dtex = request.form.get('dtex', '').strip()
+
 
         if not co_na:
             flash("公司名稱為必填")
@@ -340,9 +372,9 @@ def add_vendor():
 
             # 新增廠商
             cursor.execute("""
-                INSERT INTO companies (user_id, co_na, tax_id, pho, oer, category)
+                INSERT INTO companies (user_id, co_na, tax_id, pho, oer, dtex)
                 VALUES (%s, %s, %s, %s, %s, %s)
-            """, (session['user_id'], co_na, tax_id, pho, oer, category))
+            """, (session['user_id'], co_na, tax_id, pho, oer, dtex))
 
             conn.commit()
             flash("新增廠商成功")
@@ -411,13 +443,17 @@ def manual_invoice():
         amount = request.form['amount']
         file = request.files['upload']
 
-        # 儲存上傳檔案
+        # 確保 uploads 資料夾存在
+        upload_folder = os.path.join('static', 'uploads')
+        os.makedirs(upload_folder, exist_ok=True)
+
         file_path = ''
         if file and file.filename:
             filename = secure_filename(file.filename)
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            file_path = os.path.join(upload_folder, filename)  # e.g., static/uploads/xxx.jpg
             file.save(file_path)
 
+        # 儲存資料
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -426,12 +462,12 @@ def manual_invoice():
                 INSERT INTO invoices (in_nu, in_date, in_pri, tax_id, user_id, file_path)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
-                invoice_num[:50],
+                invoice_num[:14],
                 date,
                 amount,
                 taxid,
                 session.get("user_id"),
-                file_path
+                file_path  # 儲存完整相對路徑
             ))
 
             conn.commit()
@@ -446,6 +482,7 @@ def manual_invoice():
         return redirect(url_for('manual_invoice'))
 
     return render_template('manual_invoice.html')
+
 
 
 @app.route('/preferences', methods=['GET', 'POST'])
@@ -479,6 +516,9 @@ def invoice_auto():
 def balance_check():
     # 你的程式邏輯
     return render_template('check_balance.html')
+
+
+
 
 @app.route('/logout')
 def logout():
@@ -520,63 +560,131 @@ def parse_invoice(filepath):
         '賣方編號': '87654321'
     }
 
+# ➋ 新增：回傳上一批辨識結果（存在 session 中）
+@app.route('/last_results', methods=['GET'])
+def last_results():
+    # 回傳陣列；找不到就回傳 []
+    return jsonify(session.get('recognized_results', []))
+
 @app.route('/upload', methods=['POST'])
 def upload_files():
+    """
+    上傳並辨識發票影像 / PDF
+    - 逐檔保存到 UPLOAD_FOLDER
+    - PDF 以 poppler 轉圖後逐頁辨識
+    - 以你的 process_image() 執行偵測 + OCR
+    - 將本批 results 存進 session['recognized_results']，供返回 /auto_inv?open=results 時取回
+    - 透過 PROGRESS[job_id] 回報前端進度
+    """
+    from werkzeug.utils import secure_filename
+    import uuid
+    import os
+    import cv2
+
+    global processed_results
+
+    # 檢查檔案
     if 'files' not in request.files:
         return jsonify({'error': '沒有檔案'}), 400
 
+    # 取得 job_id（前端可傳；否則自產）
+    job_id = request.form.get('job_id') or str(uuid.uuid4())
     files = request.files.getlist('files')
+
+    # 初始化進度
+    PROGRESS[job_id] = {
+        "total": len(files),
+        "done": 0,
+        "started_at": datetime.utcnow().isoformat(),
+        "finished": False,
+        "error": ""
+    }
+
     results = []
 
-    for file in files:
-        if file.filename == '' or not allowed_file(file.filename):
-            continue
-
-        filename = secure_filename(file.filename)
-        save_path = os.path.join(UPLOAD_FOLDER, filename)
-        file.save(save_path)
-
-        image_paths = []
-
-        if filename.lower().endswith('.pdf'):
+    try:
+        for file in files:
             try:
-                images = convert_from_path(save_path, poppler_path=POPPLER_PATH)
-                for i, img in enumerate(images):
-                    img_filename = f"{filename}_{i}.png"
-                    img_path = os.path.join(UPLOAD_FOLDER, img_filename)
-                    img.save(img_path, 'PNG')
-                    image_paths.append(img_path)
+                # 檔名檢查 / 副檔名檢查
+                if not file or file.filename == '' or not allowed_file(file.filename):
+                    PROGRESS[job_id]["done"] += 1
+                    continue
+
+                # 存原檔
+                filename = secure_filename(file.filename)
+                save_path = os.path.join(UPLOAD_FOLDER, filename)
+                file.save(save_path)
+
+                # 準備要辨識的影像清單（PDF 會被拆成多張）
+                image_paths = []
+                if filename.lower().endswith('.pdf'):
+                    try:
+                        # 用 poppler 轉圖
+                        images = convert_from_path(save_path, poppler_path=POPPLER_PATH)
+                        for i, img in enumerate(images):
+                            img_filename = f"{os.path.splitext(filename)[0]}_{i+1}.png"
+                            img_path = os.path.join(UPLOAD_FOLDER, img_filename)
+                            img.save(img_path, 'PNG')
+                            image_paths.append(img_path)
+                    except Exception as e:
+                        print(f"❌ PDF 轉圖失敗: {e}")
+                        PROGRESS[job_id]["done"] += 1
+                        continue
+                else:
+                    image_paths.append(save_path)
+
+                # 逐張影像進行辨識
+                for img_path in image_paths:
+                    image = cv2.imread(img_path)
+                    if image is None:
+                        PROGRESS[job_id]["done"] += 1
+                        continue
+
+                    # 你的影像處理 + OCR
+                    parsed = process_image(image, os.path.basename(img_path))
+                    processed_results[os.path.basename(img_path)] = parsed  # 給 /result/<filename> 用
+
+                    # 組成前端需要的欄位
+                    result = {
+                        "num":   parsed.get("num", ""),
+                        "snu":   parsed.get("snu", ""),
+                        "data":  parsed.get("data", ""),
+                        "price": parsed.get("price", ""),
+                        "bnu":   parsed.get("bnu", ""),
+                        "name":  parsed.get("name", ""),
+                        "add":   parsed.get("add", ""),
+                        "imageUrl": f"/uploads/{os.path.basename(img_path)}",
+                        "filename": os.path.basename(img_path)
+                    }
+                    results.append(result)
+
+                    # 累計進度
+                    PROGRESS[job_id]["done"] += 1
+
             except Exception as e:
-                print(f"❌ PDF 轉圖失敗: {e}")
-                continue
-        else:
-            image_paths.append(save_path)
-
-        for img_path in image_paths:
-            image = cv2.imread(img_path)
-            if image is None:
+                # 單檔錯誤不中斷整批
+                print(f"❌ 檔案處理失敗 {getattr(file, 'filename', '')}: {e}")
+                PROGRESS[job_id]["done"] += 1
                 continue
 
-            parsed_data = process_image(image, os.path.basename(img_path))
-            processed_results[os.path.basename(img_path)] = parsed_data
+        # 結束：寫入 session，並回傳
+        PROGRESS[job_id]["finished"] = True
 
-            result = {
-                "num": parsed_data.get("num", ""),
-                "snu": parsed_data.get("snu", ""),
-                "data": parsed_data.get("data", ""),
-                "price": parsed_data.get("price", ""),
-                "bnu": parsed_data.get("bnu", ""),
-                "name": parsed_data.get("name", ""),
-                "add": parsed_data.get("add", ""),
-                "imageUrl": f"/uploads/{os.path.basename(img_path)}"
-            }
-            results.append(result)
+        if not results:
+            # 沒任何成功結果也把 session 清掉，避免殘留舊資料
+            session['recognized_results'] = []
+            return jsonify({'error': '未辨識到任何結果', 'job_id': job_id}), 200
 
-    if not results:
-        return jsonify({'error': '未辨識到任何結果'}), 200
+        # ★ 關鍵：把這一批結果存到 session，提供 /last_results 取回
+        session['recognized_results'] = results
+        return jsonify({"job_id": job_id, "results": results})
 
-    return jsonify(results)
-
+    except Exception as e:
+        # 整批發生錯誤
+        PROGRESS[job_id]["error"] = str(e)
+        PROGRESS[job_id]["finished"] = True
+        session['recognized_results'] = []  # 避免殘留
+        return jsonify({"error": str(e), "job_id": job_id}), 500
 
 @app.route('/confirm_result', methods=['POST'])
 def confirm_result():
@@ -679,21 +787,64 @@ def upload_camera():
     if 'file' not in request.files:
         return jsonify({'error': '沒有收到影像'}), 400
 
-    file = request.files['file']
+    fs = request.files['file']
+    # 確保副檔名
     filename = secure_filename(str(uuid.uuid4()) + '.jpg')
-    save_dir = os.path.join('uploads')
-    os.makedirs(save_dir, exist_ok=True)
-    file_path = os.path.join(save_dir, filename)
-    file.save(file_path)
+    save_path = os.path.join(UPLOAD_FOLDER, filename)
+    fs.save(save_path)
 
-    # 呼叫你的 YOLO + OCR 辨識函式
-    result = [process_image(cv2.imread(file_path), filename)]  # 假設 process_image 是你之前定義的
+    img = cv2.imread(save_path)
+    if img is None:
+        return jsonify({'error': '讀取影像失敗'}), 400
 
-    return jsonify(result)
+    data = process_image(img, filename)
+    processed_results[filename] = data
+
+    result = {
+        "num":   data.get("num", ""),
+        "snu":   data.get("snu", ""),
+        "data":  data.get("data", ""),
+        "price": data.get("price", ""),
+        "bnu":   data.get("bnu", ""),
+        "name":  data.get("name", ""),
+        "add":   data.get("add", ""),
+        "imageUrl": f"/uploads/{filename}",
+        "filename": filename
+    }
+    return jsonify([result])
+
 
 @app.route("/vendor_manage")
 def vendor_manage():
-    return render_template("vendor_manage.html")
+    if 'user_id' not in session:
+        flash("請先登入")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    if not conn:
+        flash("資料庫連線失敗")
+        return redirect(url_for("home"))
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT id, co_na AS name, tax_id, ades AS address, oer AS contact
+            FROM companies
+            WHERE user_id = %s
+        """, (session["user_id"],))
+        vendors = cursor.fetchall()
+    except Exception as e:
+        print(f"公司資料維護錯誤: {e}")
+        flash("載入公司資料失敗")
+        vendors = []
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template("vendor_manage.html", vendors=vendors)
+
+
+
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):

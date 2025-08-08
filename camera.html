@@ -30,7 +30,7 @@
 
       <!-- 右側：辨識結果 -->
       <div class="flex-1 overflow-x-auto">
-        <table class="w-full border border-gray-300 text-center text-sm">
+        <table class="w-full border border-gray-300 text-center text-base">
           <thead class="bg-gray-100">
             <tr>
               <th class="border px-2 py-1">發票號碼</th>
@@ -133,17 +133,53 @@ async function takeSnapshot() {
 
 function showCameraResult(dataList) {
   const body = document.getElementById("cameraResultBody");
-  body.innerHTML = dataList.map(data => `
+  body.innerHTML = dataList.map((data, idx) => `
     <tr>
-      <td class="border px-2 py-1">${data.num || ''}</td>
-      <td class="border px-2 py-1">${data.snu || ''}</td>
-      <td class="border px-2 py-1">${data.data || ''}</td>
-      <td class="border px-2 py-1">${data.price || ''}</td>
-      <td class="border px-2 py-1">${data.bnu || ''}</td>
-      <td class="border px-2 py-1">${data.name || ''}</td>
-      <td class="border px-2 py-1">${data.add || ''}</td>
-    </tr>`).join('');
+      <td class="border px-2 py-1">
+        <input class="w-full border rounded px-2 py-1"
+               value="${data.num || ''}"
+               oninput="updateField(${idx}, 'num', this.value)" />
+      </td>
+      <td class="border px-2 py-1">
+        <input class="w-full border rounded px-2 py-1"
+               value="${data.snu || ''}"
+               oninput="updateField(${idx}, 'snu', this.value)" />
+      </td>
+      <td class="border px-2 py-1">
+        <input class="w-full border rounded px-2 py-1"
+               value="${data.data || ''}"
+               oninput="updateField(${idx}, 'data', this.value)" />
+      </td>
+      <td class="border px-2 py-1">
+        <input class="w-full border rounded px-2 py-1"
+               value="${data.price || ''}"
+               oninput="updateField(${idx}, 'price', this.value)" />
+      </td>
+      <td class="border px-2 py-1">
+        <input class="w-full border rounded px-2 py-1"
+               value="${data.bnu || ''}"
+               oninput="updateField(${idx}, 'bnu', this.value)" />
+      </td>
+      <td class="border px-2 py-1">
+        <input class="w-full border rounded px-2 py-1"
+               value="${data.name || ''}"
+               oninput="updateField(${idx}, 'name', this.value)" />
+      </td>
+      <td class="border px-2 py-1">
+        <input class="w-full border rounded px-2 py-1"
+               value="${data.add || ''}"
+               oninput="updateField(${idx}, 'add', this.value)" />
+      </td>
+    </tr>
+  `).join('');
 }
+
+// 同步編輯值回陣列
+function updateField(index, key, value) {
+  recognitionHistory[index] = recognitionHistory[index] || {};
+  recognitionHistory[index][key] = value;
+}
+
 
 function downloadCSV() {
   const rows = [

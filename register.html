@@ -106,18 +106,46 @@
 
     <!-- 字數即時顯示 Script -->
     <script>
+        // ★ 回到 /auto_inv?open=results 時：先還原，再強制渲染，而且強化錯誤輸出
         document.addEventListener('DOMContentLoaded', () => {
-            const textarea = document.getElementById('description');
-            const charCount = document.getElementById('charCount');
+          const params = new URLSearchParams(window.location.search);
+          if (params.get('open') !== 'results') return;
 
-            function updateCharCount() {
-                const count = textarea.value.length;
-                charCount.textContent = `目前已輸入 ${count} / 200 字`;
+          let cached = [];
+          try {
+            cached = JSON.parse(localStorage.getItem('recognizedResults') || '[]');
+          } catch (e) {
+            console.error('[UI] 解析 localStorage.recognizedResults 失敗：', e);
+          }
+          console.log('[UI] 還原 recognizedResults 筆數 =', Array.isArray(cached) ? cached.length : 'N/A');
+
+          if (Array.isArray(cached) && cached.length > 0) {
+            recognizedResults = cached;
+
+            // 左側列表用快取畫
+            try {
+              renderCachedFilesFromResults();
+            } catch (e) {
+              console.error('[UI] renderCachedFilesFromResults 失敗：', e);
             }
 
-            textarea.addEventListener('input', updateCharCount);
-            updateCharCount(); // 初始化
-        });
+            // 右側彈窗：等一輪 event loop 再畫，避免 DOM 還沒 ready
+            setTimeout(() => {
+              try {
+                const tbody = document.getElementById('modalResultsBody');
+                console.log('[UI] tbody 是否存在 =', !!tbody);
+                showRecognizeResults(recognizedResults);
+                console.log('[UI] 畫完 rows，tbody.childElementCount =', tbody ? tbody.childElementCount : -1);
+                document.getElementById('resultModal').classList.remove('hidden');
+              } catch (e) {
+                console.error('[UI] showRecognizeResults 發生錯誤：', e);
+                alert('渲染辨識結果時發生錯誤，請打開 F12 看 console 訊息');
+              }
+            }, 0);
+          } else {
+            console.warn('[UI] localStorage 沒資料，無法還原辨識結果。');
+          }
+        });    
     </script>
 </body>
 </html>
