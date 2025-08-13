@@ -3,80 +3,75 @@
 {% block title %}各廠商發票紀錄{% endblock %}
 
 {% block head_extra %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
-<script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
+  <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
 {% endblock %}
 
 {% block content %}
-<div class="px-[5cm] py-10">
-  <h2 class="text-4xl font-bold text-blue-700 mb-8">各廠商發票紀錄</h2>
+<div class="px-10 py-8">
+  <h2 class="text-3xl font-bold text-blue-700 mb-8 text-left">各廠商發票紀錄</h2>
 
-  <!-- 🔍 查詢條件 -->
-  <div class="bg-white border border-gray-300 rounded-xl shadow p-6 mb-10">
-    <form method="POST" action="{{ url_for('search') }}">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-lg">
-        <div>
-          <label for="vendor" class="block font-semibold mb-2">選擇廠商：</label>
-          <select id="vendor" name="vendor"
-                  class="w-full border border-gray-400 rounded-lg px-4 py-2 focus:ring focus:ring-blue-300">
-            <option value="">全部廠商</option>
-            {% for company in companies %}
-              <option value="{{ company.id }}" {% if selected_vendor == company.id %}selected{% endif %}>
-                {{ company.co_na }}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label for="date-range" class="block font-semibold mb-2">查詢期間：</label>
-          <input type="text" id="date-range" name="date_range" value="{{ date_range or '' }}" readonly
-                 class="w-full border border-gray-400 rounded-lg px-4 py-2 bg-white cursor-pointer focus:ring focus:ring-blue-300" />
-        </div>
-        <div class="flex items-end justify-start md:justify-end">
-          <button type="submit"
-                  class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-lg font-semibold flex items-center gap-2">
-            <i class="fas fa-search"></i> 查詢
-          </button>
-        </div>
+  <form method="POST" action="{{ url_for('search') }}">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10 text-lg">
+      <div>
+        <label for="vendor" class="block font-semibold mb-2">選擇廠商：</label>
+        <select id="vendor" name="vendor" class="w-full border border-gray-400 rounded px-4 py-3 text-lg">
+          <option value="">全部廠商</option>
+          {% for company in companies %}
+            <option value="{{ company.id }}" {% if selected_vendor == company.id %}selected{% endif %}>{{ company.co_na }}</option>
+          {% endfor %}
+        </select>
       </div>
-    </form>
-  </div>
+      <div>
+        <label for="date-range" class="block font-semibold mb-2">查詢期間：</label>
+        <input type="text" id="date-range" name="date_range" value="{{ date_range or '' }}" readonly class="w-full border border-gray-400 rounded px-4 py-3 bg-white cursor-pointer text-lg" />
+      </div>
+      <div class="flex items-end">
+        <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700 text-lg font-semibold">
+          查詢
+        </button>
+      </div>
+    </div>
+  </form>
 
-  <!-- 📋 表格清單 -->
-  <div class="bg-white border border-gray-300 shadow rounded-xl p-6">
-    <h3 class="text-2xl font-bold text-gray-800 mb-4">發票清單</h3>
+  <div class="bg-white border border-gray-400 shadow rounded-lg p-6 text-lg">
+    <h2 class="text-2xl font-bold mb-6 text-gray-800">發票清單</h2>
     <div class="overflow-x-auto">
-      <table class="min-w-full border border-gray-300 text-base text-left">
-        <thead class="bg-blue-100">
+      <table class="min-w-full border border-black text-lg text-left">
+        <thead class="bg-gray-200">
           <tr>
-            <th class="border px-5 py-3">發票號碼</th>
-            <th class="border px-5 py-3">統一編號</th>
-            <th class="border px-5 py-3">日期</th>
-            <th class="border px-5 py-3">價格</th>
-            <th class="border px-5 py-3">賣方編號</th>
-            <th class="border px-5 py-3">公司名稱</th>
-            <th class="border px-5 py-3">公司地址</th>
+            <th class="border border-black px-6 py-3">發票號碼</th>
+            <th class="border border-black px-6 py-3">統一編號</th>
+            <th class="border border-black px-6 py-3">日期</th>
+            <th class="border border-black px-6 py-3">價格</th>
+            <th class="border border-black px-6 py-3">公司名稱</th>
+            <th class="border border-black px-6 py-3">登錄時間</th>
+            <th class="border border-black px-6 py-3">查看圖片</th>
           </tr>
         </thead>
         <tbody>
           {% if invoices %}
             {% for invoice in invoices %}
-            <tr class="odd:bg-white even:bg-gray-50 hover:bg-yellow-50 transition">
-              <td class="border px-5 py-2">{{ invoice.num }}</td>
-              <td class="border px-5 py-2">{{ invoice.snu }}</td>
-              <td class="border px-5 py-2">{{ invoice.data }}</td>
-              <td class="border px-5 py-2">{{ invoice.price }}</td>
-              <td class="border px-5 py-2">{{ invoice.bun }}</td>
-              <td class="border px-5 py-2">{{ invoice.name }}</td>
-              <td class="border px-5 py-2">{{ invoice.add }}</td>
-            </tr>
+              <tr class="odd:bg-white even:bg-gray-100">
+                <td class="border border-black px-6 py-3">{{ invoice.num }}</td>
+                <td class="border border-black px-6 py-3">{{ invoice.snu }}</td>
+                <td class="border border-black px-6 py-3">{{ invoice.data }}</td>
+                <td class="border border-black px-6 py-3">{{ invoice.price }}</td>
+                <td class="border border-black px-6 py-3">{{ invoice.bun }}</td>
+                <td class="border border-black px-6 py-3">{{ invoice.ctime }}</td>
+                <td class="border border-black px-6 py-3">
+                  {% if invoice.path %}
+                    <a href="{{ url_for('static', filename=invoice.path) }}" target="_blank" class="text-blue-600 hover:underline">查看</a>
+                  {% else %}
+                    無附件
+                  {% endif %}
+                </td>
+              </tr>
             {% endfor %}
           {% else %}
-          <tr>
-            <td colspan="7" class="text-center py-6 text-gray-500 italic">
-              <i class="fas fa-info-circle mr-2"></i> 目前沒有資料
-            </td>
-          </tr>
+            <tr>
+              <td colspan="7" class="text-center py-6 text-gray-500">目前沒有資料</td>
+            </tr>
           {% endif %}
         </tbody>
       </table>
@@ -85,13 +80,15 @@
 </div>
 
 <script>
-  new Litepicker({
-    element: document.getElementById('date-range'),
-    singleMode: false,
-    format: 'YYYY-MM-DD',
-    numberOfMonths: 2,
-    numberOfColumns: 2,
-    autoApply: true,
+  document.addEventListener('DOMContentLoaded', function () {
+    new Litepicker({
+      element: document.getElementById('date-range'),
+      singleMode: false,
+      format: 'YYYY-MM-DD',
+      numberOfMonths: 2,
+      numberOfColumns: 2,
+      autoApply: true
+    });
   });
 </script>
 {% endblock %}

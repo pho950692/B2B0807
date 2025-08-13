@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}統計報表 - fastB2B{% endblock title %}
+
+{% block head_extra %}
+  <!-- Fonts + Chart.js -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root{
+      --card:#fff; --muted:#6b7280; --ink:#0f172a; --ring:#e5e7eb;
+      --brand:#2563eb; --brand-ghost:rgba(37,99,235,.08);
+    }
+    body{ font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    .page-zoom{ font-size: clamp(17px, 1rem + .35vw, 19px); }
+    .card{ background:var(--card); border:1px solid var(--ring); border-radius:16px; box-shadow:0 8px 24px rgba(2,6,23,.06); }
+    .chip{ display:inline-flex; align-items:center; gap:.55rem; background:var(--brand-ghost); color:var(--brand);
+           padding:.42rem .75rem; border-radius:999px; font-size:.95rem; font-weight:700; }
+    .h2{ font-size:clamp(2.1rem, 1.6rem + 1.4vw, 2.6rem); font-weight:800; color:var(--ink); }
+    .h3{ font-size:1.35rem; font-weight:800; color:var(--ink); }
+    .muted{ color:var(--muted); font-size:.98em; }
+    .canvas-wrap{ height:380px; } @media (min-width:1280px){ .canvas-wrap{ height:440px; } }
+    .ghost-list li{ padding:.45rem 0; } .ghost-list li+li{ border-top:1px dashed var(--ring); }
+    select{ font-size:1em; }
+    .tip{ font-size:.95em; color:#334155 }
+  </style>
+{% endblock head_extra %}
+
+{% block content %}
+<div class="page-zoom mx-auto max-w-6xl px-4 md:px-6 lg:px-8 py-8">
+
+  <!-- 頁首 -->
+  <header class="mb-8">
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="chip">📊 統計報表</div>
+      {% set total_amt = (vendor_amount_ratio | default([]) | sum(attribute='total')) %}
+      <div class="chip">期間總金額：{{ (total_amt or 0) | round(2) }} 元</div>
+    </div>
+    <h2 class="h2 mt-3">營運概況 Dashboard</h2>
+    <p class="muted mt-1">1️⃣ 粒度切換的折線圖（年 / 月 / 年比較YTD）｜2️⃣ 各廠商占比 ｜3️⃣ 整體發票數量趨勢。</p>
+  </header>
+
+  <!-- 1. 可切換粒度的折線圖 -->
+  <section class="card p-5 md:p-6 mb-8">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="h3">1️⃣ 發票數量折線圖</h3>
+      <span class="muted">單位：筆</span>
+    </div>
+
+    <!-- 粒度 + 年/月 選擇 -->
+    <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 mb-4">
+      <div>
+        <label class="block font-semibold mb-1.5">統計粒度</label>
+        <select id="selGran" class="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+          <option value="Y">年（顯示該年 12 個月）</option>
+          <option value="M">月（顯示該月每日）</option>
+          <option value="AY">年比較（2000～今年，統計到本月）</option>
+        </select>
+      </div>
+      <div class="sm:col-span-2">
+        <label class="block font-semibold mb-1.5">年份</label>
+        <select id="selYear" class="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30"></select>
+      </div>
+      <div class="sm:col-span-2" id="monthWrap">
+        <label class="block font-semibold mb-1.5">月份</label>
+        <select id="selMonth" class="w-full border rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500/30"></select>
+      </div>
+    </div>
+    <p class="tip mb-3">
+      年：該年 12 月 ｜ 月：該月每日 ｜ 年比較：2000～今年，每年只統計 1～目前月份（YTD），直接由發票紀錄聚合。
+    </p>
+
+    <div class="canvas-wrap"><canvas id="smartLineChart"></canvas></div>
+  </section>
+
+  <!-- 2. 各廠商發票金額占比（圓餅圖） -->
+  <section class="card p-5 md:p-6 mb-8">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="h3">2️⃣ 各廠商發票金額占比</h3>
+      <span class="muted">Top 占比列表</span>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div class="canvas-wrap"><canvas id="vendorPieChart"></canvas></div>
+      <div class="lg:max-w-sm">
+        <ul class="ghost-list text-slate-800 leading-relaxed">
+          {% for item in vendor_amount_ratio %}
+            <li class="flex items-center justify-between">
+              <span class="muted">• {{ item.name or '(未命名)' }}</span>
+              <span class="font-semibold">{{ item.total | round(2) }} 元</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. 發票數量趨勢（全期間） -->
+  <section class="card p-5 md:p-6">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="h3">3️⃣ 發票數量趨勢（全期間）</h3>
+      <span class="muted">單位：筆</span>
+    </div>
+    <div class="canvas-wrap"><canvas id="overallTrendChart"></canvas></div>
+  </section>
+
+</div>
+
+<script>
+  /* ---------- 後端注入的原始資料 ---------- */
+  const RAW_TREND = {{ (invoice_count_trend | default([])) | tojson }};
+  const VENDOR_RATIO = {{ (vendor_amount_ratio | default([])) | tojson }};
+
+  /* ---------- 小工具 ---------- */
+  const pad2 = n => String(n).padStart(2,'0');
+  const parseDateOnly = s => (s||'').slice(0,10); // YYYY-MM-DD
+  const ymd = (y,m,d)=> `${y}-${pad2(m)}-${pad2(d)}`;
+  function daysInMonth(y, m){ return new Date(y, m, 0).getDate(); } // m:1..12
+  function firstDayOfYear(y){ return new Date(y,0,1); }
+
+  // 以「日」為 key 的筆數 map
+  const dayCount = RAW_TREND.reduce((acc, r)=>{
+    const k = parseDateOnly(r.date);
+    acc[k] = (acc[k]||0) + (Number(r.count)||0);
+    return acc;
+  }, {});
+
+  // 找到最新一筆的年月，給預設值
+  function latestYM(){
+    const keys = Object.keys(dayCount).sort();
+    if(!keys.length){
+      const t = new Date();
+      return {y:t.getFullYear(), m:t.getMonth()+1};
+    }else{
+      const last = keys[keys.length-1];
+      return {y:Number(last.slice(0,4)), m:Number(last.slice(5,7))};
+    }
+  }
+
+  /* ---------- 表單元素 ---------- */
+  const selGran = document.getElementById('selGran');
+  const selYear = document.getElementById('selYear');
+  const selMonth = document.getElementById('selMonth');
+  const monthWrap = document.getElementById('monthWrap');
+
+  // 年：2000 ~ 今年
+  function fillYears(){
+    const now = new Date().getFullYear();
+    for(let y=2000; y<=now; y++){
+      selYear.add(new Option(String(y), y));
+    }
+  }
+  // 月：1..12
+  function fillMonths(){
+    selMonth.innerHTML = '';
+    for(let m=1; m<=12; m++){
+      selMonth.add(new Option(`${m} 月`, m));
+    }
+  }
+  // 粒度切換時，只有「月」需要顯示月份
+  function toggleMonth(){
+    monthWrap.style.display = (selGran.value === 'M') ? '' : 'none';
+  }
+
+  /* ---------- Chart 共用樣式 ---------- */
+  const common = {
+    responsive:true, maintainAspectRatio:false,
+    plugins:{
+      legend:{ position:'bottom', labels:{ usePointStyle:true, boxWidth:10, font:{ size:15, weight:700 } } },
+      tooltip:{ backgroundColor:'rgba(15,23,42,.9)', padding:12, titleFont:{ size:15, weight:800 }, bodyFont:{ size:15 } }
+    },
+    scales:{ x:{ grid:{ display:false }, ticks:{ font:{ size:14 } } },
+             y:{ grid:{ color:'#eef2f7' }, ticks:{ font:{ size:14 } } } }
+  };
+
+  /* ---------- 第1張：智慧折線圖 ---------- */
+  const smartCtx = document.getElementById('smartLineChart');
+  const smartChart = new Chart(smartCtx, {
+    type:'line',
+    data:{ labels:[], datasets:[{ label:'發票數量', data:[], borderColor:'#2563eb', borderWidth:2.2, pointRadius:2.2, tension:.35, fill:false }]},
+    options: common
+  });
+
+  // 年粒度：該年 12 個月
+  function buildYearSeries(y){
+    const labels = Array.from({length:12}, (_,i)=> `${i+1} 月`);
+    const data = Array.from({length:12}, (_,i)=>{
+      const m = i+1, dmax = daysInMonth(y, m);
+      let sum = 0;
+      for(let d=1; d<=dmax; d++){
+        sum += (dayCount[ymd(y,m,d)] || 0);
+      }
+      return sum;
+    });
+    return {labels, data};
+  }
+  // 月粒度：該月每日
+  function buildMonthSeries(y, m){
+    const dmax = daysInMonth(y, m);
+    const labels = Array.from({length:dmax}, (_,i)=> i+1);
+    const data = labels.map(d => dayCount[ymd(y,m,d)] || 0);
+    return {labels, data};
+  }
+  // 年比較（YTD）：2000～今年，每年只累計 1～目前月份
+  function buildAnnualYTDSeries(){
+    const now = new Date();
+    const nowY = now.getFullYear();
+    const nowM = now.getMonth()+1;
+    const startY = 2000;
+
+    const labels = [];
+    const data = [];
+    const slots = Array(nowY - startY + 1).fill(0);
+
+    // 直接根據日紀錄累計：只算月份 <= 現在月份
+    Object.keys(dayCount).forEach(k=>{
+      const y = +k.slice(0,4);
+      const m = +k.slice(5,7);
+      if(y >= startY && y <= nowY && m <= nowM){
+        slots[y - startY] += dayCount[k];
+      }
+    });
+
+    for(let y=startY; y<=nowY; y++){
+      labels.push(String(y));
+      data.push(slots[y - startY] || 0);
+    }
+    return {labels, data};
+  }
+
+  function refreshSmartChart(){
+    const y = Number(selYear.value);
+    const gran = selGran.value;
+    let series;
+    if(gran === 'Y'){
+      series = buildYearSeries(y);
+    }else if(gran === 'M'){
+      const m = Number(selMonth.value);
+      series = buildMonthSeries(y, m);
+    }else{ // 'AY' 年比較YTD
+      series = buildAnnualYTDSeries();
+    }
+    smartChart.data.labels = series.labels;
+    smartChart.data.datasets[0].data = series.data;
+    smartChart.update();
+  }
+
+  /* ---------- 第2張：各廠商占比 ---------- */
+  const pieCtx = document.getElementById('vendorPieChart');
+  new Chart(pieCtx, {
+    type:'pie',
+    data:{
+      labels: VENDOR_RATIO.map(v => v.name || '(未命名)'),
+      datasets:[{
+        data: VENDOR_RATIO.map(v => v.total || 0),
+        backgroundColor:['#60a5fa','#34d399','#f87171','#fbbf24','#a78bfa','#fb7185','#4ade80','#22d3ee']
+      }]
+    },
+    options:{ ...common, scales: undefined }
+  });
+
+  /* ---------- 第3張：全期間趨勢 ---------- */
+  const trendLabels = RAW_TREND.map(r => parseDateOnly(r.date));
+  const trendData = RAW_TREND.map(r => Number(r.count)||0);
+  const trendCtx = document.getElementById('overallTrendChart');
+  new Chart(trendCtx, {
+    type:'line',
+    data:{ labels:trendLabels, datasets:[{ label:'發票數量', data:trendData, borderColor:'#10b981', borderWidth:2.2, pointRadius:2.2, tension:.35, fill:false }]},
+    options: common
+  });
+
+  /* ---------- 初始化 ---------- */
+  (function init(){
+    fillYears();
+    fillMonths();
+    const {y, m} = latestYM();
+    selYear.value = y;
+    selMonth.value = m;
+    toggleMonth();
+    refreshSmartChart();
+
+    selGran.addEventListener('change', ()=>{ toggleMonth(); refreshSmartChart(); });
+    selYear.addEventListener('change', refreshSmartChart);
+    selMonth.addEventListener('change', refreshSmartChart);
+  })();
+</script>
+{% endblock content %}

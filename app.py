@@ -1,79 +1,151 @@
-from flask import Flask, request, render_template, redirect, url_for, flash, session, jsonify, render_template, send_from_directory
-import mysql.connector
-from werkzeug.security import generate_password_hash, check_password_hash
-from config import db_config
-import re
+from flask import (
+    Flask, request, render_template, redirect, url_for,
+    flash, session, jsonify, send_from_directory
+)
 import os
-from werkzeug.utils import secure_filename
+import re
+import uuid
 import cv2
 import torch
 import pytesseract
+import mysql.connector
 from PIL import Image
-from collections import namedtuple
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 from pdf2image import convert_from_path
-import uuid
-
-app = Flask(__name__)
-app.secret_key = 'your_secret_key'  # 建議改成環境變數或更強隨機字串
-
-# 在檔案 import 後、app = Flask(__name__) 之後放
 from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
+from config import db_config
+from glob import glob
 
-PROGRESS = defaultdict(lambda: {
-    "total": 0,        # 總數
-    "done": 0,         # 已完成
-    "started_at": None,
-    "finished": False, # 是否已完成
-    "error": ""        # 批次錯誤訊息（選用）
-})
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  # 建議改為環境變數
 
-
-import os
-
+# ---------- 基本設定 ----------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# PDF 轉圖工具
+# PDF 轉圖工具（你機器上的 poppler bin）
 POPPLER_PATH = os.path.join(BASE_DIR, 'poppler', 'Library', 'bin')
 
-# 圖片上傳 & 裁切資料夾
+# 上傳與裁切資料夾
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
 CROPPED_FOLDER = os.path.join(UPLOAD_FOLDER, 'cropped')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(CROPPED_FOLDER, exist_ok=True)
 
-# OCR 執行檔位置
-pytesseract.pytesseract.tesseract_cmd =  r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-#
+# Tesseract 執行檔路徑（依你電腦調整）
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-weight_path = r'C:\b2b0806\b2b_st\weights\best.pt'  # 或用 os.path.join(BASE_DIR, 'weights', 'best.pt')
-
-import os
+# YOLO 權重（依你實際檔案）
+weight_path = r'C:\b2b0806\b2b_st\weights\best.pt'
 if not os.path.exists(weight_path):
     raise FileNotFoundError(f"❌ 找不到模型權重檔案：{weight_path}")
 
 model = torch.hub.load('ultralytics/yolov5:v6.2', 'custom',
-                       path=weight_path,
-                       force_reload=True)
+                       path=weight_path, force_reload=True)
+
+# 測試
+print("CROPPED_FOLDER =", CROPPED_FOLDER)
+print("Some crops:", os.listdir(CROPPED_FOLDER)[:10])
 
 
+# 批次進度
+PROGRESS = defaultdict(lambda: {
+    "total": 0,
+    "done": 0,
+    "started_at": None,
+    "finished": False,
+    "error": ""
+})
+
+# 記憶體快取：單張結果頁使用
+processed_results = {}
+
+
+# ---------- 共用工具 ----------
 def get_db_connection():
-    print("嘗試連線資料庫")
     try:
-        conn = mysql.connector.connect(**db_config)
-        print("✅ 成功連線資料庫")
-        return conn
+        return mysql.connector.connect(**db_config)
     except mysql.connector.Error as err:
-        print("❌ 資料庫連線失敗，錯誤內容如下：")
-        print(err)  # 這行會印出詳細錯誤
+        print("❌ 資料庫連線失敗：", err)
         return None
 
+
+def allowed_file(filename: str) -> bool:
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+# ------- 清洗函式（全域唯一版本）-------
+def only_digits(s: str) -> str:
+    return re.sub(r"[^0-9]", "", s or "")
+
+
+def only_alnum(s: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]", "", s or "")
+
+
+def only_number(s: str) -> str:
+    s = re.sub(r"[^0-9.]", "", s or "")
+    if s.count(".") > 1:
+        i = s.find(".")
+        s = s[:i+1] + s[i+1:].replace(".", "")
+    return s
+
+
+def clean_price(raw):
+    if not raw:
+        return None
+    s = str(raw).replace('O', '0').replace('o', '0').replace('I', '1').replace('l', '1')
+    m = re.search(r'(\d[\d,]*\.?\d*)', s)
+    if not m:
+        return None
+    num = m.group(1).replace(',', '')
+    try:
+        return Decimal(num)
+    except InvalidOperation:
+        return None
+
+
+def clean_date_str(raw):
+    if not raw:
+        return None
+    s = str(raw).strip()
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y%m%d",
+                "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            pass
+    m = re.search(r'([A-Za-z]{3,9})\s?(\d{1,2}),?\s?(\d{4})', s)
+    if m:
+        try:
+            return datetime.strptime(' '.join(m.groups()), "%B %d %Y").date().isoformat()
+        except ValueError:
+            pass
+    return None
+# ---------------------------------
+
+
+# ---------- 一般頁面 ----------
 @app.route('/')
 def home():
     return render_template('home.html')
 
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
+@app.route('/hello')
+def hello():
+    return "Hello Flask"
+
+
+# ---------- 進度 API ----------
 @app.route('/progress/<job_id>')
 def get_progress(job_id):
     if job_id not in PROGRESS:
@@ -90,65 +162,7 @@ def get_progress(job_id):
     })
 
 
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@app.route('/search', methods=['GET', 'POST'])
-def search():
-    conn = get_db_connection()
-    if not conn:
-        return "資料庫連線失敗"
-
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM companies")
-    companies = cursor.fetchall()
-
-    selected_vendor = None
-    invoices = []
-    date_range = ''
-
-    if request.method == 'POST':
-        selected_vendor = request.form.get('vendor')
-        date_range = request.form.get('date_range', '').strip()
-
-        query = """
-            SELECT in_date AS date, in_nu AS number, in_pri AS amount
-            FROM invoices
-            WHERE 1=1
-        """
-        params = []
-
-        if selected_vendor:
-            cursor.execute("SELECT tax_id FROM companies WHERE id = %s", (selected_vendor,))
-            row = cursor.fetchone()
-            if row:
-                tax_id = row['tax_id']
-                query += " AND tax_id = %s"
-                params.append(tax_id)
-
-        if date_range and ' - ' in date_range:
-            try:
-                start_date, end_date = [d.strip() for d in date_range.split(' - ')]
-                query += " AND in_date BETWEEN %s AND %s"
-                params.extend([start_date, end_date])
-            except ValueError:
-                flash("日期格式錯誤")
-
-        cursor.execute(query, tuple(params))
-        invoices = cursor.fetchall()
-
-    cursor.close()
-    conn.close()
-
-    return render_template('search.html',
-                           companies=companies,
-                           invoices=invoices,
-                           selected_vendor=int(selected_vendor) if selected_vendor else None,
-                           date_range=date_range)
-
-
-
+# ---------- 登入 / 註冊 / 帳戶 ----------
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -167,10 +181,6 @@ def login():
             cursor = conn.cursor(dictionary=True)
             cursor.execute("SELECT * FROM users WHERE us_na = %s", (username,))
             user = cursor.fetchone()
-        except Exception as e:
-            print(f"登入錯誤 Exception: {e}")
-            flash("登入過程發生錯誤")
-            return redirect(url_for('login'))
         finally:
             cursor.close()
             conn.close()
@@ -178,7 +188,7 @@ def login():
         if user and check_password_hash(user['pawd'], password):
             session['user_id'] = user['id']
             session['username'] = user['us_na']
-            return redirect(url_for('home'))  # ✅ 導向首頁
+            return redirect(url_for('home'))
         else:
             flash("帳號或密碼錯誤")
             return redirect(url_for('login'))
@@ -200,7 +210,6 @@ def register():
         ades = request.form.get('address', '').strip()
         desc = request.form.get('description', '').strip()
 
-        # 帳號與密碼格式檢查
         if not re.fullmatch(r'[A-Za-z0-9]{8,12}', us_na):
             flash("帳號需為8~12碼英數字")
             return redirect(url_for('register'))
@@ -209,7 +218,6 @@ def register():
             return redirect(url_for('register'))
 
         hashed = generate_password_hash(pawd)
-
         conn = get_db_connection()
         if not conn:
             flash("資料庫連線失敗")
@@ -217,18 +225,17 @@ def register():
 
         try:
             cursor = conn.cursor()
-            # 檢查帳號是否存在
             cursor.execute("SELECT 1 FROM users WHERE us_na = %s", (us_na,))
             if cursor.fetchone():
                 flash("帳號已存在")
                 return redirect(url_for('register'))
 
-            # 新增使用者
-            cursor.execute("INSERT INTO users (us_na, pawd, name, mail) VALUES (%s, %s, %s, %s)",
-                           (us_na, hashed, name, mail))
+            cursor.execute(
+                "INSERT INTO users (us_na, pawd, name, mail) VALUES (%s, %s, %s, %s)",
+                (us_na, hashed, name, mail)
+            )
             user_id = cursor.lastrowid
 
-            # 若有填廠商資料則新增
             if co_na and tax_id:
                 cursor.execute("""
                     INSERT INTO companies (user_id, co_na, tax_id, pho, oer, ades, `desc`)
@@ -238,9 +245,8 @@ def register():
             conn.commit()
             flash("註冊成功，請登入")
             return redirect(url_for('login'))
-
         except Exception as e:
-            print(f"註冊錯誤: {e}")
+            print("註冊錯誤：", e)
             flash("註冊過程發生錯誤")
             return redirect(url_for('register'))
         finally:
@@ -248,6 +254,7 @@ def register():
             conn.close()
 
     return render_template('register.html')
+
 
 @app.route('/account_edit', methods=['GET', 'POST'])
 def account_edit():
@@ -275,7 +282,6 @@ def account_edit():
         ades = request.form.get('address', '')
         desc = request.form.get('description', '')
 
-        # 先檢查舊密碼是否正確
         cursor.execute("SELECT pawd FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         if not user or not check_password_hash(user['pawd'], old_pwd):
@@ -284,14 +290,12 @@ def account_edit():
             conn.close()
             return redirect(url_for('account_edit'))
 
-        # 新密碼驗證
         if new_pwd:
             if new_pwd != confirm_pwd:
                 flash("新密碼與確認密碼不符")
                 cursor.close()
                 conn.close()
                 return redirect(url_for('account_edit'))
-            # 可加入強度檢查，這裡簡單示範
             if len(new_pwd) < 8:
                 flash("新密碼至少需8碼")
                 cursor.close()
@@ -300,18 +304,17 @@ def account_edit():
             hashed_new_pwd = generate_password_hash(new_pwd)
             cursor.execute("UPDATE users SET pawd = %s WHERE id = %s", (hashed_new_pwd, user_id))
 
-        # 更新 users 其他欄位
         cursor.execute("UPDATE users SET name=%s, mail=%s WHERE id=%s", (name, email, user_id))
 
-        # 更新 companies 資料（假設一個帳號只有一間公司）
         cursor.execute("SELECT id FROM companies WHERE user_id = %s", (user_id,))
         company = cursor.fetchone()
         if company:
             cursor.execute("""
-                UPDATE companies SET co_na=%s, tax_id=%s, pho=%s, oer=%s, ades=%s, `desc`=%s WHERE user_id=%s
+                UPDATE companies
+                SET co_na=%s, tax_id=%s, pho=%s, oer=%s, ades=%s, `desc`=%s
+                WHERE user_id=%s
             """, (co_na, tax_id, pho, oer, ades, desc, user_id))
         else:
-            # 如果沒有廠商資料就新增一筆
             cursor.execute("""
                 INSERT INTO companies (user_id, co_na, tax_id, pho, oer, ades, `desc`)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -323,7 +326,6 @@ def account_edit():
         flash("資料更新成功")
         return redirect(url_for('account_edit'))
 
-    # GET 時帶入資料
     cursor.execute("SELECT us_na, name, mail FROM users WHERE id = %s", (user_id,))
     user = cursor.fetchone()
     cursor.execute("SELECT * FROM companies WHERE user_id = %s", (user_id,))
@@ -331,9 +333,39 @@ def account_edit():
     cursor.close()
     conn.close()
 
-    return render_template('account_edit.html',
-                           user=user,
-                           company=company)
+    return render_template('account_edit.html', user=user, company=company)
+
+
+# ---------- 公司維護 ----------
+@app.route('/vendor_manage')
+def vendor_manage():
+    if 'user_id' not in session:
+        flash("請先登入")
+        return redirect(url_for("login"))
+
+    conn = get_db_connection()
+    if not conn:
+        flash("資料庫連線失敗")
+        return redirect(url_for("home"))
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT id, co_na AS name, tax_id, ades AS address, oer AS contact
+            FROM companies
+            WHERE user_id = %s
+        """, (session["user_id"],))
+        vendors = cursor.fetchall()
+    except Exception as e:
+        print("公司資料維護錯誤:", e)
+        flash("載入公司資料失敗")
+        vendors = []
+    finally:
+        cursor.close()
+        conn.close()
+
+    return render_template("vendor_manage.html", vendors=vendors)
+
 
 @app.route('/add_vendor', methods=['GET', 'POST'])
 def add_vendor():
@@ -348,11 +380,9 @@ def add_vendor():
         oer = request.form.get('owner', '').strip()
         dtex = request.form.get('dtex', '').strip()
 
-
         if not co_na:
             flash("公司名稱為必填")
             return render_template('add_vendor.html')
-
         if not tax_id:
             flash("統一編號為必填")
             return render_template('add_vendor.html')
@@ -364,13 +394,11 @@ def add_vendor():
 
         try:
             cursor = conn.cursor()
-            # 檢查統一編號是否已存在
             cursor.execute("SELECT 1 FROM companies WHERE tax_id = %s", (tax_id,))
             if cursor.fetchone():
                 flash("統一編號已存在")
                 return render_template('add_vendor.html')
 
-            # 新增廠商
             cursor.execute("""
                 INSERT INTO companies (user_id, co_na, tax_id, pho, oer, dtex)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -379,9 +407,8 @@ def add_vendor():
             conn.commit()
             flash("新增廠商成功")
             return redirect(url_for('search'))
-
         except Exception as e:
-            print(f"新增廠商錯誤: {e}")
+            print("新增廠商錯誤:", e)
             flash("新增廠商失敗")
             return render_template('add_vendor.html')
         finally:
@@ -391,7 +418,86 @@ def add_vendor():
     return render_template('add_vendor.html')
 
 
+# ---------- 查詢 ----------
+@app.route('/search', methods=['GET', 'POST'])
+def search():
+    if 'user_id' not in session:
+        flash("請先登入")
+        return redirect(url_for('login'))
 
+    user_id = session['user_id']
+    conn = get_db_connection()
+    if not conn:
+        return "資料庫連線失敗"
+
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT id, co_na FROM companies WHERE user_id = %s", (user_id,))
+    companies = cursor.fetchall()
+
+    selected_vendor = None
+    invoices = []
+    date_range = ''
+
+    if request.method == 'POST':
+        selected_vendor = request.form.get('vendor')
+        date_range = request.form.get('date_range', '').strip()
+
+        query = """
+            SELECT in_nu AS num,
+                   invoices.tax_id AS snu,
+                   in_date AS data,
+                   in_pri AS price,
+                   co_na AS bun,
+                   created_at AS ctime,
+                   file_path AS path
+            FROM invoices
+            JOIN companies ON invoices.tax_id = companies.tax_id
+            WHERE invoices.user_id = %s
+        """
+        params = [user_id]
+
+        if selected_vendor:
+            cursor.execute("SELECT tax_id FROM companies WHERE id = %s", (selected_vendor,))
+            row = cursor.fetchone()
+            if row:
+                tax_id = row['tax_id']
+                query += " AND invoices.tax_id = %s"
+                params.append(tax_id)
+
+        if date_range and ' - ' in date_range:
+            try:
+                start_date, end_date = [d.strip() for d in date_range.split(' - ')]
+                query += " AND in_date BETWEEN %s AND %s"
+                params.extend([start_date, end_date])
+            except ValueError:
+                flash("日期格式錯誤")
+
+        cursor.execute(query, tuple(params))
+        invoices = cursor.fetchall()
+
+        for inv in invoices:
+            ctime = inv.get('ctime')
+            if ctime:
+                if isinstance(ctime, datetime):
+                    inv['ctime'] = ctime.strftime('%Y-%m-%d %H:%M')
+                elif isinstance(ctime, str):
+                    try:
+                        dt = datetime.fromisoformat(ctime)
+                        inv['ctime'] = dt.strftime('%Y-%m-%d %H:%M')
+                    except ValueError:
+                        inv['ctime'] = ctime
+
+    cursor.close()
+    conn.close()
+
+    return render_template('search.html',
+                           companies=companies,
+                           invoices=invoices,
+                           selected_vendor=int(selected_vendor) if selected_vendor else None,
+                           date_range=date_range)
+
+
+# 以公司/期間搜尋（如果你有使用這頁）
 @app.route('/invoice_search', methods=['GET'])
 def invoice_search():
     company_name = request.args.get('company_name', '')
@@ -402,7 +508,16 @@ def invoice_search():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
-    query = "SELECT c.co_na AS company_name, c.tax_id AS company_id, i.number AS invoice_number, i.amount, i.date FROM invoices i JOIN companies c ON i.tax_id = c.tax_id WHERE 1=1"
+    query = """
+        SELECT c.co_na AS company_name,
+               c.tax_id AS company_id,
+               i.in_nu  AS invoice_number,
+               i.in_pri AS amount,
+               i.in_date AS date
+        FROM invoices i
+        JOIN companies c ON i.tax_id = c.tax_id
+        WHERE 1=1
+    """
     params = []
 
     if company_name:
@@ -412,10 +527,10 @@ def invoice_search():
         query += " AND c.tax_id = %s"
         params.append(tax_id)
     if start_date:
-        query += " AND i.date >= %s"
+        query += " AND i.in_date >= %s"
         params.append(start_date)
     if end_date:
-        query += " AND i.date <= %s"
+        query += " AND i.in_date <= %s"
         params.append(end_date)
 
     cursor.execute(query, params)
@@ -429,6 +544,8 @@ def invoice_search():
                            end_date=end_date,
                            results=results)
 
+
+# ---------- 手動新增 ----------
 @app.route('/manual_invoice', methods=['GET', 'POST'])
 def manual_invoice():
     if 'user_id' not in session:
@@ -436,44 +553,39 @@ def manual_invoice():
         return redirect(url_for('login'))
 
     if request.method == 'POST':
-        company = request.form['company']
         taxid = request.form['taxid']
         invoice_num = request.form['invoice_num']
         date = request.form['date']
         amount = request.form['amount']
         file = request.files['upload']
 
-        # 確保 uploads 資料夾存在
-        upload_folder = os.path.join('static', 'uploads')
-        os.makedirs(upload_folder, exist_ok=True)
-
         file_path = ''
         if file and file.filename:
             filename = secure_filename(file.filename)
-            file_path = os.path.join(upload_folder, filename)  # e.g., static/uploads/xxx.jpg
-            file.save(file_path)
+            upload_folder = os.path.join(app.static_folder, 'uploads')
+            os.makedirs(upload_folder, exist_ok=True)
+            save_path = os.path.join(upload_folder, filename)
+            file.save(save_path)
+            file_path = os.path.join('uploads', filename)
 
-        # 儲存資料
         try:
             conn = get_db_connection()
             cursor = conn.cursor()
-
             cursor.execute("""
                 INSERT INTO invoices (in_nu, in_date, in_pri, tax_id, user_id, file_path)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (
-                invoice_num[:14],
+                invoice_num[:50],
                 date,
                 amount,
                 taxid,
                 session.get("user_id"),
-                file_path  # 儲存完整相對路徑
+                file_path
             ))
-
             conn.commit()
             flash('✅ 發票登錄成功')
         except Exception as e:
-            print(f"❌ 發票登錄失敗：{e}")
+            print("❌ 發票登錄失敗：", e)
             flash('❌ 發票登錄失敗，請稍後再試')
         finally:
             cursor.close()
@@ -484,116 +596,33 @@ def manual_invoice():
     return render_template('manual_invoice.html')
 
 
-
-@app.route('/preferences', methods=['GET', 'POST'])
-def preferences():
-    if request.method == 'POST':
-        company_name = request.form.get('company_name')
-        tax_id = request.form.get('tax_id')
-        phone = request.form.get('phone')
-        username = request.form.get('username')
-        email = request.form.get('email')
-        retention_days = request.form.get('retention_days')
-        auto_title = 'auto_title' in request.form
-        language = request.form.get('language')
-        dark_mode = 'dark_mode' in request.form
-        auto_email = 'auto_email' in request.form
-        notify_complete = 'notify_complete' in request.form
-        notify_error = 'notify_error' in request.form
-
-        # 更新使用者偏好邏輯，例如寫入資料庫...
-
-        flash('偏好設定已更新')
-        return redirect(url_for('preferences'))
-
-    return render_template('preferences.html')
-
+# ---------- 自動辨識 UI ----------
 @app.route('/auto_inv')
 def invoice_auto():
     return render_template('auto_inv.html')
 
+
 @app.route('/balance_check')
 def balance_check():
-    # 你的程式邏輯
     return render_template('check_balance.html')
 
 
-
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
-
-@app.route('/hello')
-def hello():
-    return "Hello Flask"
-
-# ✅ 用來儲存處理結果
-processed_results = {}
-
-FIELD_LABELS = {
-    0: "發票號碼",
-    1: "統一編號",
-    2: "日期",
-    3: "價格",
-    4: "賣方編號",
-    5: "公司名稱",
-    6: "公司地址"
-}
-
-
-def parse_invoice(filepath):
-    # 這裡用你自己模型的辨識邏輯，以下是範例
-    from PIL import Image
-    import pytesseract
-
-    img = Image.open(filepath)
-    text = pytesseract.image_to_string(img, lang='eng+chi_tra')
-
-    # 假設你用正則表達式或其他方式提取欄位
-    return {
-        '發票號碼': 'AB12345678',
-        '統一編號': '12345678',
-        '日期': '2025-07-28',
-        '價格': '3000',
-        '賣方編號': '87654321'
-    }
-
-# ➋ 新增：回傳上一批辨識結果（存在 session 中）
+# ---------- 上傳與辨識 ----------
 @app.route('/last_results', methods=['GET'])
 def last_results():
-    # 回傳陣列；找不到就回傳 []
     return jsonify(session.get('recognized_results', []))
+
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
-    """
-    上傳並辨識發票影像 / PDF
-    - 逐檔保存到 UPLOAD_FOLDER
-    - PDF 以 poppler 轉圖後逐頁辨識
-    - 以你的 process_image() 執行偵測 + OCR
-    - 將本批 results 存進 session['recognized_results']，供返回 /auto_inv?open=results 時取回
-    - 透過 PROGRESS[job_id] 回報前端進度
-    """
-    from werkzeug.utils import secure_filename
-    import uuid
-    import os
-    import cv2
-
-    global processed_results
-
-    # 檢查檔案
     if 'files' not in request.files:
         return jsonify({'error': '沒有檔案'}), 400
 
-    # 取得 job_id（前端可傳；否則自產）
     job_id = request.form.get('job_id') or str(uuid.uuid4())
     files = request.files.getlist('files')
 
-    # 初始化進度
     PROGRESS[job_id] = {
-        "total": len(files),
+        "total": 0,
         "done": 0,
         "started_at": datetime.utcnow().isoformat(),
         "finished": False,
@@ -605,182 +634,289 @@ def upload_files():
     try:
         for file in files:
             try:
-                # 檔名檢查 / 副檔名檢查
-                if not file or file.filename == '' or not allowed_file(file.filename):
+                if file.filename == '' or not allowed_file(file.filename):
                     PROGRESS[job_id]["done"] += 1
                     continue
 
-                # 存原檔
                 filename = secure_filename(file.filename)
                 save_path = os.path.join(UPLOAD_FOLDER, filename)
                 file.save(save_path)
 
-                # 準備要辨識的影像清單（PDF 會被拆成多張）
                 image_paths = []
                 if filename.lower().endswith('.pdf'):
                     try:
-                        # 用 poppler 轉圖
                         images = convert_from_path(save_path, poppler_path=POPPLER_PATH)
-                        for i, img in enumerate(images):
-                            img_filename = f"{os.path.splitext(filename)[0]}_{i+1}.png"
+                        for i, img in enumerate(images, start=1):
+                            img_filename = f"{os.path.splitext(filename)[0]}_{i}.png"
                             img_path = os.path.join(UPLOAD_FOLDER, img_filename)
                             img.save(img_path, 'PNG')
                             image_paths.append(img_path)
                     except Exception as e:
-                        print(f"❌ PDF 轉圖失敗: {e}")
-                        PROGRESS[job_id]["done"] += 1
+                        print("❌ PDF 轉圖失敗:", e)
                         continue
                 else:
                     image_paths.append(save_path)
 
-                # 逐張影像進行辨識
+                PROGRESS[job_id]["total"] += len(image_paths)
+
                 for img_path in image_paths:
-                    image = cv2.imread(img_path)
-                    if image is None:
+                    try:
+                        image = cv2.imread(img_path)
+                        if image is None:
+                            PROGRESS[job_id]["done"] += 1
+                            continue
+
+                        parsed_data = process_image(image, os.path.basename(img_path))
+                        processed_results[os.path.basename(img_path)] = parsed_data
+
+                        results.append({
+                            "num":   parsed_data.get("num", ""),
+                            "snu":   parsed_data.get("snu", ""),
+                            "data":  parsed_data.get("data", ""),
+                            "price": parsed_data.get("price", ""),
+                            "bnu":   parsed_data.get("bnu", ""),
+                            "name":  parsed_data.get("name", ""),
+                            "add":   parsed_data.get("add", ""),
+                            "imageUrl": f"/uploads/{os.path.basename(img_path)}",
+                            "filename": os.path.basename(img_path)
+                        })
+                    except Exception as e:
+                        print(f"❌ 單張處理失敗 {os.path.basename(img_path)}:", e)
+                    finally:
                         PROGRESS[job_id]["done"] += 1
-                        continue
-
-                    # 你的影像處理 + OCR
-                    parsed = process_image(image, os.path.basename(img_path))
-                    processed_results[os.path.basename(img_path)] = parsed  # 給 /result/<filename> 用
-
-                    # 組成前端需要的欄位
-                    result = {
-                        "num":   parsed.get("num", ""),
-                        "snu":   parsed.get("snu", ""),
-                        "data":  parsed.get("data", ""),
-                        "price": parsed.get("price", ""),
-                        "bnu":   parsed.get("bnu", ""),
-                        "name":  parsed.get("name", ""),
-                        "add":   parsed.get("add", ""),
-                        "imageUrl": f"/uploads/{os.path.basename(img_path)}",
-                        "filename": os.path.basename(img_path)
-                    }
-                    results.append(result)
-
-                    # 累計進度
-                    PROGRESS[job_id]["done"] += 1
 
             except Exception as e:
-                # 單檔錯誤不中斷整批
-                print(f"❌ 檔案處理失敗 {getattr(file, 'filename', '')}: {e}")
-                PROGRESS[job_id]["done"] += 1
-                continue
+                print(f"❌ 檔案處理失敗 {getattr(file, 'filename', '')}:", e)
 
-        # 結束：寫入 session，並回傳
+        session['recognized_results'] = results
         PROGRESS[job_id]["finished"] = True
 
         if not results:
-            # 沒任何成功結果也把 session 清掉，避免殘留舊資料
-            session['recognized_results'] = []
-            return jsonify({'error': '未辨識到任何結果', 'job_id': job_id}), 200
+            return jsonify({'job_id': job_id, 'error': '未辨識到任何結果'}), 200
 
-        # ★ 關鍵：把這一批結果存到 session，提供 /last_results 取回
-        session['recognized_results'] = results
         return jsonify({"job_id": job_id, "results": results})
 
     except Exception as e:
-        # 整批發生錯誤
         PROGRESS[job_id]["error"] = str(e)
         PROGRESS[job_id]["finished"] = True
-        session['recognized_results'] = []  # 避免殘留
-        return jsonify({"error": str(e), "job_id": job_id}), 500
+        return jsonify({"job_id": job_id, "error": str(e)}), 500
 
+
+# ---------- 儲存辨識結果 ----------
 @app.route('/confirm_result', methods=['POST'])
 def confirm_result():
     if 'user_id' not in session:
         return jsonify({'error': '未登入'}), 403
 
-    data = request.json
-    if not isinstance(data, list):
+    rows = request.json
+    if not isinstance(rows, list):
         return jsonify({'error': '資料格式錯誤'}), 400
+
+    # 清洗工具
+    import re
+    from decimal import Decimal, InvalidOperation
+    def only_digits(s):  # 只留數字
+        return re.sub(r'[^0-9]', '', s or '')
+    def only_alnum(s):   # 英數
+        return re.sub(r'[^A-Za-z0-9]', '', s or '')
+    def clean_price(raw):
+        if not raw: return None
+        s = str(raw).replace('O','0').replace('o','0').replace('I','1').replace('l','1')
+        m = re.search(r'(\d[\d,]*\.?\d*)', s)
+        if not m: return None
+        num = m.group(1).replace(',', '')
+        try:
+            return Decimal(num)
+        except InvalidOperation:
+            return None
+    def clean_date(raw):
+        if not raw: return None
+        s = str(raw).strip()
+        for fmt in ("%Y-%m-%d","%Y/%m/%d","%Y.%m.%d","%Y%m%d","%d-%m-%Y","%d/%m/%Y","%d.%m.%Y"):
+            try:
+                return datetime.strptime(s, fmt).date().isoformat()
+            except ValueError:
+                pass
+        m = re.search(r'([A-Za-z]{3,9})\s?(\d{1,2}),?\s?(\d{4})', s)
+        if m:
+            try:
+                return datetime.strptime(' '.join(m.groups()), "%B %d %Y").date().isoformat()
+            except ValueError:
+                pass
+        return None
 
     try:
         conn = get_db_connection()
-        cursor = conn.cursor()
+        if not conn:
+            return jsonify({'error': '資料庫連線失敗'}), 500
+        cur = conn.cursor()
 
-        for row in data:
-            cursor.execute("""
-                INSERT INTO invoices (in_nu, in_date, in_pri, tax_id, in_tax, user_id)
-                VALUES (%s, %s, %s, %s, %s, %s)
+        # 先準備一個「一定建立得出來」的公司 upsert
+        # 假設 companies.tax_id 上有 UNIQUE/PK（外鍵會要求它被索引）
+        ensure_company_sql = """
+            INSERT INTO companies (user_id, co_na, tax_id)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE co_na = co_na
+        """
+
+        for r in rows:
+            in_nu   = only_alnum((r.get('num') or ''))[:14]
+            tax_id  = only_digits((r.get('snu') or ''))[:8]
+            in_tax  = only_digits((r.get('bnu') or ''))[:8]
+            in_date = clean_date(r.get('data') or None)
+            in_pri  = clean_price(r.get('price'))
+
+            # 若有統編，先 upsert 公司，避免外鍵錯誤
+            if tax_id:
+                cur.execute(ensure_company_sql, (session['user_id'], '(未命名)', tax_id))
+                # 先提交，確保這筆被外鍵看得到（不同 MySQL 設定/隔離級別下更保險）
+                conn.commit()
+
+            # 寫入發票（允許 None -> 欄位需允許 NULL）
+            cur.execute("""
+                INSERT INTO invoices (in_nu, in_date, in_pri, tax_id, in_tax, user_id, source)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
-                row.get("num", "").strip()[:14],  # ⚠️ 限制發票號碼長度
-                row.get("data", "").strip(),
-                row.get("price", "").strip(),
-                row.get("snu", "").strip(),
-                row.get("bnu", "").strip(),
-                session.get("user_id")
+                in_nu or None,
+                in_date,
+                in_pri,
+                tax_id or None,
+                in_tax or None,
+                session['user_id'],
+                'auto'
             ))
 
         conn.commit()
         return jsonify({'message': '✅ 發票資料已成功儲存'})
+
     except Exception as e:
+        try: conn.rollback()
+        except: pass
         print("❌ 發票儲存錯誤：", e)
         return jsonify({'error': str(e)}), 500
     finally:
-        cursor.close()
-        conn.close()
+        try: cur.close()
+        except: pass
+        try: conn.close()
+        except: pass
 
+# ---------- OCR 主流程 ----------
 def process_image(image, filename):
     img_path = os.path.join(UPLOAD_FOLDER, filename)
     cv2.imwrite(img_path, image)
-    print(f"✅ 原圖儲存路徑：{os.path.abspath(img_path)}")
+    print(f"✅ 原圖儲存：{os.path.abspath(img_path)}")
 
     results = model(image)
     predictions = results.pandas().xywh[0]
-
-    print(f"【DEBUG】圖片 {filename} 預測框數量：{len(predictions)}")
+    print(f"【DEBUG】{filename} 預測框數：{len(predictions)}")
 
     data = {
         "imageUrl": f"/uploads/{filename}",
-        "num": "",
-        "snu": "",
-        "data": "",  # 發票日期
-        "price": "",
-        "bnu": "",
-        "name": "",
-        "add": ""
+        "num": "",   # 英數
+        "snu": "",   # 數字
+        "data": "",  # 日期原樣（結果頁顯示；寫 DB 時再 clean）
+        "price": "", # 數字.小數
+        "bnu": "",   # 數字
+        "name": "",  # 公司名（顯示用）
+        "add": ""    # 地址（顯示用）
     }
 
     if predictions.empty:
-        print(f"⚠️ 圖片 {filename} 無預測框")
+        print(f"⚠️ {filename} 無預測框")
         return data
 
-    for idx, row in predictions.iterrows():
-        key = row['name']
+    for _, row in predictions.iterrows():
+        key_raw = str(row['name'])
+        # 類別名清洗：去頭尾空白，只留安全字元（英數、底線、減號）
+        key = re.sub(r'[^A-Za-z0-9_-]+', '', key_raw.strip()) or 'field'
 
         cx, cy, w, h = row['xcenter'], row['ycenter'], row['width'], row['height']
-        x1 = max(0, int(cx - w / 2))
-        y1 = max(0, int(cy - h / 2))
-        x2 = min(image.shape[1], int(cx + w / 2))
-        y2 = min(image.shape[0], int(cy + h / 2))
-
+        x1 = max(0, int(cx - w / 2)); y1 = max(0, int(cy - h / 2))
+        x2 = min(image.shape[1], int(cx + w / 2)); y2 = min(image.shape[0], int(cy + h / 2))
         crop = image[y1:y2, x1:x2]
         if crop.size == 0:
-            print(f"⚠️ 裁切圖為空：{key}")
+            print(f"⚠️ 裁切圖為空：{key_raw} -> {key}")
             continue
 
         cropped_filename = f"{filename.rsplit('.', 1)[0]}_{key}.jpg"
-        cropped_path = os.path.join(CROPPED_FOLDER, cropped_filename)
-        cv2.imwrite(cropped_path, crop)
-        print(f"✅ 裁切圖儲存路徑: {cropped_path}")
+        cv2.imwrite(os.path.join(CROPPED_FOLDER, cropped_filename), crop)
+
+        # 只存檔名
+        data[key + "Img"] = cropped_filename
 
         text = pytesseract.image_to_string(
             Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)),
             lang='eng+chi_tra',
             config='--psm 6'
-        ).strip().replace('\n', '').replace(' ', '')
-
-        print(f"🔠 OCR【{key}】：{text}")
+        ).strip().replace('\n','').replace(' ','')
         data[key] = text
-        data[key + "Img"] = f"uploads/cropped/{cropped_filename}"
 
-    print("✅ 完整結果：", data)
+
+    # 回傳前做輕量清洗（顯示上更友善；DB 寫入仍以 confirm_result 再嚴格處理）
+    data["num"]   = only_alnum(data.get("num"))[:14]
+    data["snu"]   = only_digits(data.get("snu"))[:8]
+    data["bnu"]   = only_digits(data.get("bnu"))[:8]
+    data["price"] = only_number(data.get("price"))
+
+    print("✅ 清洗後：", data)
     return data
 
+
+# ---------- 上傳目錄 ----------
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
+
+
+@app.route('/uploads/cropped/<filename>')
+def uploaded_cropped_file(filename):
+    return send_from_directory(CROPPED_FOLDER, filename)
+
+
+# ---------- 單張結果頁 ----------
+@app.route('/result/<filename>')
+def result_view(filename):
+    result = processed_results.get(filename)
+    if not result:
+        return "找不到結果", 404
+
+    display_plan = [
+        ("num","發票號碼"),("snu","統一編號"),("data","開立日期"),
+        ("price","價格"),("bnu","賣方編號"),("name","公司名稱"),("add","公司地址"),
+    ]
+
+    texts = []
+    base_noext = os.path.splitext(filename)[0]
+
+    for key, label in display_plan:
+        val = (result.get(key) or "")
+        # 優先用 process_image 記錄的檔名
+        raw_rel = (result.get(f"{key}Img") or "").strip().replace("\\", "/")
+        crop_name = raw_rel.split("/")[-1] if raw_rel else ""
+
+        # 若沒有或不存在，試著在資料夾用「寬鬆條件」找
+        if not crop_name or not os.path.exists(os.path.join(CROPPED_FOLDER, crop_name)):
+            pattern = os.path.join(CROPPED_FOLDER, f"{base_noext}_*.jpg")
+            candidates = [os.path.basename(p) for p in glob(pattern)]
+            key_l = key.lower()
+            picked = next((c for c in candidates if key_l in c.lower()), None)
+            crop_name = picked or f"{base_noext}_{key}.jpg"  # 仍保留最後備案
+
+        texts.append({
+            "key": key,
+            "label": label,
+            "text": val,
+            "cropped_image": crop_name.strip(),  # 一律去空白
+        })
+
+    page_data = {"imageUrl": result.get("imageUrl", f"/uploads/{filename}"), "filename": filename}
+    return render_template('result.html', result=page_data, texts=texts)
+
+# ---------- 其他頁 ----------
 @app.route('/camera')
 def camera():
     return render_template('camera.html')
+
 
 @app.route('/upload_camera', methods=['POST'])
 def upload_camera():
@@ -788,7 +924,6 @@ def upload_camera():
         return jsonify({'error': '沒有收到影像'}), 400
 
     fs = request.files['file']
-    # 確保副檔名
     filename = secure_filename(str(uuid.uuid4()) + '.jpg')
     save_path = os.path.join(UPLOAD_FOLDER, filename)
     fs.save(save_path)
@@ -814,77 +949,168 @@ def upload_camera():
     return jsonify([result])
 
 
-@app.route("/vendor_manage")
-def vendor_manage():
+
+# 放在 app.py 其他 route 後面
+@app.route('/inv_re', methods=['GET', 'POST'])
+def inv_re():
     if 'user_id' not in session:
         flash("請先登入")
-        return redirect(url_for("login"))
+        return redirect(url_for('login'))
 
+    user_id = session['user_id']
     conn = get_db_connection()
-    if not conn:
-        flash("資料庫連線失敗")
-        return redirect(url_for("home"))
+    cursor = conn.cursor(dictionary=True)
 
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("""
-            SELECT id, co_na AS name, tax_id, ades AS address, oer AS contact
-            FROM companies
-            WHERE user_id = %s
-        """, (session["user_id"],))
-        vendors = cursor.fetchall()
-    except Exception as e:
-        print(f"公司資料維護錯誤: {e}")
-        flash("載入公司資料失敗")
-        vendors = []
-    finally:
-        cursor.close()
-        conn.close()
+    selected_vendor = None
+    start_date = None
+    end_date = None
+    date_range = ''
 
-    return render_template("vendor_manage.html", vendors=vendors)
+    if request.method == 'POST':
+        selected_vendor = request.form.get('vendor')
+        date_range = request.form.get('date_range', '').strip()
 
+        if date_range and ' - ' in date_range:
+            try:
+                start_date, end_date = [d.strip() for d in date_range.split(' - ')]
+            except ValueError:
+                flash("日期格式錯誤")
 
+    # 🟦 共用條件處理
+    conditions = ["invoices.user_id = %s"]
+    params = [user_id]
 
+    if selected_vendor:
+        cursor.execute("SELECT tax_id FROM companies WHERE id = %s", (selected_vendor,))
+        row = cursor.fetchone()
+        if row:
+            conditions.append("invoices.tax_id = %s")
+            params.append(row['tax_id'])
 
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
+    if start_date and end_date:
+        conditions.append("in_date BETWEEN %s AND %s")
+        params.extend([start_date, end_date])
 
-@app.route('/uploads/cropped/<filename>')
-def uploaded_cropped_file(filename):
-    return send_from_directory(CROPPED_FOLDER, filename)
+    condition_str = " AND ".join(conditions)
 
-@app.route('/result/<filename>')
-def result_view(filename):
-    result = processed_results.get(filename)
-    if not result:
-        return "找不到結果", 404
+    # 1️⃣ 每月發票總金額
+    cursor.execute(f"""
+        SELECT DATE_FORMAT(in_date, '%%Y-%%m') AS month,
+               SUM(COALESCE(in_pri, 0)) AS total
+        FROM invoices
+        WHERE {condition_str}
+        GROUP BY month ORDER BY month
+    """, tuple(params))
+    total_amount_by_month = cursor.fetchall()
 
-    Result = namedtuple('Result', result.keys())
-    result_obj = Result(*result.values())
+    # 2️⃣ 各廠商金額占比
+    cursor.execute(f"""
+        SELECT companies.co_na AS name,
+               SUM(COALESCE(in_pri, 0)) AS total
+        FROM invoices
+        JOIN companies ON invoices.tax_id = companies.tax_id
+        WHERE {condition_str}
+        GROUP BY name
+    """, tuple(params))
+    vendor_amount_ratio = cursor.fetchall()
 
-    # 直接使用模型原始欄位，不使用 KEY_MAP
-    key_label_map = {
-        'num': '發票號碼',
-        'snu': '統一編號',
-        'data': '開立日期',
-        'price': '價格',
-        'bnu': '賣方編號',
-        'name': '公司名稱',
-        'add': '公司地址'
+    # 3️⃣ 發票數量趨勢（按日期統計）
+    cursor.execute(f"""
+        SELECT in_date AS date,
+               COUNT(*) AS count
+        FROM invoices
+        WHERE {condition_str}
+        GROUP BY in_date
+        ORDER BY in_date
+    """, tuple(params))
+    invoice_count_trend = cursor.fetchall()
+
+    # 4️⃣ 發票金額排行（最高5名）
+    cursor.execute(f"""
+        SELECT companies.co_na AS name,
+               SUM(COALESCE(in_pri, 0)) AS total
+        FROM invoices
+        JOIN companies ON invoices.tax_id = companies.tax_id
+        WHERE {condition_str}
+        GROUP BY name
+        ORDER BY total DESC
+        LIMIT 5
+    """, tuple(params))
+    top_vendors = cursor.fetchall()
+
+    # 5️⃣ 發票金額排行（最低5名）
+    cursor.execute(f"""
+        SELECT companies.co_na AS name,
+               SUM(COALESCE(in_pri, 0)) AS total
+        FROM invoices
+        JOIN companies ON invoices.tax_id = companies.tax_id
+        WHERE {condition_str}
+        GROUP BY name
+        ORDER BY total ASC
+        LIMIT 5
+    """, tuple(params))
+    bottom_vendors = cursor.fetchall()
+
+    # 6️⃣ 自動 vs 手動數量統計
+    cursor.execute(f"""
+        SELECT source, COUNT(*) AS count
+        FROM invoices
+        WHERE {condition_str}
+        GROUP BY source
+    """, tuple(params))
+    source_data = cursor.fetchall()
+
+    source_ratio = {
+        'manual': 0,
+        'auto': 0
     }
+    for row in source_data:
+        source_ratio[row['source']] = row['count']
 
-    texts = []
-    for key, label in key_label_map.items():
-        text = getattr(result_obj, key, '')
-        cropped_image = getattr(result_obj, key + 'Img', '')
-        texts.append({
-            'label': label,
-            'text': text,
-            'cropped_image': cropped_image
-        })
+    # 所有該使用者的廠商
+    cursor.execute("SELECT id, co_na FROM companies WHERE user_id = %s", (user_id,))
+    companies = cursor.fetchall()
 
-    return render_template('result.html', result=result_obj, texts=texts)
+    # 🟦 Decimal 轉 float（避免 JSON 錯誤）
+    def convert_decimal(data):
+        for item in data:
+            for k, v in item.items():
+                if isinstance(v, Decimal):
+                    item[k] = float(v)
+        return data
+
+    total_amount_by_month = convert_decimal(total_amount_by_month)
+    vendor_amount_ratio = convert_decimal(vendor_amount_ratio)
+    invoice_count_trend = convert_decimal(invoice_count_trend)
+    top_vendors = convert_decimal(top_vendors)
+    bottom_vendors = convert_decimal(bottom_vendors)
+
+    cursor.close()
+    conn.close()
+
+    return render_template("inv_re.html",
+        companies=companies,
+        selected_vendor=int(selected_vendor) if selected_vendor else None,
+        start_date=start_date,
+        end_date=end_date,
+        date_range=date_range,
+        total_amount_by_month=total_amount_by_month,
+        vendor_amount_ratio=vendor_amount_ratio,
+        invoice_count_trend=invoice_count_trend,
+        top_vendors=top_vendors,
+        bottom_vendors=bottom_vendors,
+        source_ratio=source_ratio
+    )
+
+
+# ---------- 偏好 ----------
+@app.route('/preferences', methods=['GET', 'POST'])
+def preferences():
+    if request.method == 'POST':
+        # 略：自行儲存偏好
+        flash('偏好設定已更新')
+        return redirect(url_for('preferences'))
+    return render_template('preferences.html')
 
 
 if __name__ == '__main__':
