@@ -108,25 +108,18 @@
 </div>
 
 <script>
-  /* ===================== 清洗工具 ===================== */
-  function keepAlnum(s){ return String(s||'').replace(/[^A-Za-z0-9]/g,''); }      // 發票號碼：英數
-  function keepDigits(s){ return String(s||'').replace(/\D/g,''); }               // 統編、賣方編號：數字
-  function keepNumber(s){                                                         // 價格：數字+唯一小數點
-    let t = String(s||'').replace(/[^0-9.]/g,'');
-    const i = t.indexOf('.');
-    if (i !== -1) t = t.slice(0,i+1) + t.slice(i+1).replace(/\./g,'');
-    return t;
+  function keepAlnum(s){ return String(s||'').replace(/[^A-Za-z0-9]/g,''); }
+  function keepDigits(s){ return String(s||'').replace(/\D/g,''); }
+  function keepNumber(s){
+    let t = String(s||'').replace(/[^0-9.]/g,''); const i = t.indexOf('.');
+    if (i !== -1) t = t.slice(0,i+1) + t.slice(i+1).replace(/\./g,''); return t;
   }
   function sanitizeRow(row){
-    return {
-      ...row,
-      num:  keepAlnum(row?.num).slice(0,14),
-      snu:  keepDigits(row?.snu).slice(0,8),
-      bnu:  keepDigits(row?.bnu).slice(0,8),
-      price: keepNumber(row?.price),
-      // data / name / add 原樣
-    };
-  }
+    const r = { ...row };
+    if (!r.sun)  r.sun  = r.snu  || '';
+    if (!r.cash) r.cash = r.price|| '';
+    return r;
+  }  
 
   /* ===================== 狀態元素 ===================== */
   const fileTableBody    = document.getElementById('fileTableBody');
@@ -255,7 +248,7 @@
   }
 
   /* ===================== 上傳並辨識 ===================== */
-  async function submitFiles() {
+    async function submitFiles() {
     if (selectedFiles.length === 0) {
       alert('請先選擇檔案');
       return;
@@ -271,7 +264,7 @@
 
     try {
       const response = await fetch('/upload', { method: 'POST', body: formData });
-      const payload = await response.json().catch(() => ({}));
+      const payload  = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         setProgress(0, selectedFiles.length || 0, true, payload.error || response.statusText);
@@ -280,6 +273,15 @@
         return;
       }
 
+      // ✅ 這裡改成「直接導向 result 頁」
+      if (payload.first) {
+        // 進度補滿（讓使用者感覺完整）
+        setProgress(selectedFiles.length, selectedFiles.length, true, '');
+        location.href = payload.first;   // ← 直接導向 /result/<filename>
+        return;
+      }
+
+      // 如果後端沒給 first（理論上不會），就退回原先的彈窗邏輯
       let results = payload.results || payload;
       if (!Array.isArray(results) || results.length === 0) {
         setProgress(selectedFiles.length || 0, selectedFiles.length || 0, true, '');
@@ -288,13 +290,9 @@
         return;
       }
 
-      // 前端先淨化，確保畫面乾淨
       recognizedResults = results.map(sanitizeRow);
       try { localStorage.setItem('recognizedResults', JSON.stringify(recognizedResults)); } catch {}
-
-      showRecognizeResults(recognizedResults);
-
-      // 補滿進度
+      showRecognizeResults(recognizedResults);  // 備援：保留舊的彈窗
       setProgress(selectedFiles.length || recognizedResults.length, selectedFiles.length || recognizedResults.length, true, '');
       disableActions(false);
     } catch (err) {
@@ -311,66 +309,35 @@
     tbody.innerHTML = '';
 
     (results || []).forEach((r, idx) => {
-      const filename = r.filename || (r.imageUrl ? r.imageUrl.split('/').pop() : `image_${idx+1}.jpg`);
+      r = sanitizeRow(r);
+      const filename    = r.filename || (r.imageUrl ? r.imageUrl.split('/').pop() : `image_${idx+1}.jpg`);
+      const displayName = r.origin || filename;
+
       const tr = document.createElement('tr');
-
-      const tdText = (text) => {
-        const td = document.createElement('td');
-        td.className = 'border px-4 py-2';
-        td.textContent = text ?? '';
-        return td;
-      };
-      const tdInput = (key) => {
-        const td = document.createElement('td');
-        td.className = 'border px-4 py-2';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.className = 'w-full text-center';
-        input.value = r[key] ?? '';
-
-        // 即時清洗
-        input.oninput = () => {
-          let v = input.value;
-          if (key === 'num')  v = keepAlnum(v).slice(0,14);
-          if (key === 'snu')  v = keepDigits(v).slice(0,8);
-          if (key === 'bnu')  v = keepDigits(v).slice(0,8);
-          if (key === 'price') v = keepNumber(v);
-          input.value = v;
-        };
-        // 失焦再保險一次
-        input.onchange = () => {
-          let v = input.value;
-          if (key === 'num')  v = keepAlnum(v).slice(0,14);
-          if (key === 'snu')  v = keepDigits(v).slice(0,8);
-          if (key === 'bnu')  v = keepDigits(v).slice(0,8);
-          if (key === 'price') v = keepNumber(v);
-          recognizedResults[idx][key] = v;
-          input.value = v;
-          cacheResults();
-        };
-
-        td.appendChild(input);
-        return td;
+      const tdText = (text) => { const td=document.createElement('td'); td.className='border px-4 py-2'; td.textContent=text??''; return td; };
+      const tdInput = (key, clean) => {
+        const td=document.createElement('td'); td.className='border px-4 py-2';
+        const input=document.createElement('input'); input.type='text'; input.className='w-full text-center'; input.value=r[key]??'';
+        input.oninput = () => { let v=input.value; if(clean==='alnum') v=keepAlnum(v).slice(0,14);
+                                 if(clean==='digits') v=keepDigits(v).slice(0,8);
+                                 if(clean==='money') v=keepNumber(v); input.value=v; };
+        input.onchange=()=>{ r[key]=input.value; recognizedResults[idx]=sanitizeRow(r); cacheResults(); };
+        td.appendChild(input); return td;
       };
 
-      tr.appendChild(tdText(filename));
-      tr.appendChild(tdInput('num'));
-      tr.appendChild(tdInput('snu'));
-      tr.appendChild(tdInput('data'));
-      tr.appendChild(tdInput('price'));
-      tr.appendChild(tdInput('bnu'));
+      tr.appendChild(tdText(displayName));
+      tr.appendChild(tdInput('num','alnum'));
+      tr.appendChild(tdInput('sun','digits'));   // 統編
+      tr.appendChild(tdInput('date'));
+      tr.appendChild(tdInput('cash','money'));   // 金額
+      tr.appendChild(tdInput('bnu','digits'));
       tr.appendChild(tdInput('name'));
       tr.appendChild(tdInput('add'));
 
-      const tdPreview = document.createElement('td');
-      tdPreview.className = 'border px-4 py-2';
-      const a = document.createElement('a');
-      a.href = `/result/${filename}`;
-      a.target = '_blank';
-      a.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm px-2 py-1 rounded';
-      a.textContent = '詳細預覽';
-      tdPreview.appendChild(a);
-      tr.appendChild(tdPreview);
+      const tdPreview=document.createElement('td'); tdPreview.className='border px-4 py-2';
+      const a=document.createElement('a'); a.href=`/result/${filename}`; a.target='_blank';
+      a.className='bg-purple-600 hover:bg-purple-700 text-white text-sm px-2 py-1 rounded'; a.textContent='詳細預覽';
+      tdPreview.appendChild(a); tr.appendChild(tdPreview);
 
       tbody.appendChild(tr);
     });
@@ -395,10 +362,13 @@
   document.getElementById('downloadBtn').onclick = () => {
     if (!recognizedResults || !recognizedResults.length) { alert('無辨識結果可下載'); return; }
     const rows = [['發票號碼','統一編號','日期','價格','賣方編號','公司名稱','公司地址']];
-    recognizedResults.forEach(r => rows.push([r.num||'', r.snu||'', r.data||'', r.price||'', r.bnu||'', r.name||'', r.add||'']));
+    recognizedResults.forEach(r => {
+      r = sanitizeRow(r);
+      rows.push([r.num||'', r.sun||'', r.date||'', (r.cash||''), r.bnu||'', r.name||'', r.add||'']);
+    });
     const csv = rows.map(r => r.join(',')).join('\n');
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '辨識結果.csv';
+    const blob = new Blob(["\uFEFF"+csv], {type: "text/csv;charset=utf-8;"});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='辨識結果.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 

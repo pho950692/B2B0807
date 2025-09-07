@@ -37,7 +37,7 @@
         <div class="w-36 h-24 border rounded-lg flex items-center justify-center overflow-hidden bg-gray-100">
           {% if item.cropped_image %}
             <img
-              src="{{ url_for('uploaded_cropped_file', filename=item.cropped_image) }}"
+              src="{{ url_for('yr_uploads_cropped', filename=item.cropped_image) }}"
               alt="{{ item.label }} 裁切圖"
               class="max-w-full max-h-full object-contain cursor-zoom-in"
               onclick="toggleImageModal(this.src)" />
@@ -140,9 +140,12 @@
     const get = k => (document.querySelector(`input[data-key="${k}"]`)?.value || '').trim();
     const one = {
       num:  get('num'),
-      snu:  get('snu'),
+      sun:  get('sun')  || get('snu'),
       data: get('data'),
-      price:get('price'),
+      cash: get('cash') || get('price'),
+      // 相容舊後端（可以保留）
+      snu:  get('sun')  || get('snu'),
+      price:get('cash') || get('price'),
       bnu:  get('bnu'),
       name: get('name'),
       add:  get('add')
