@@ -12,7 +12,6 @@ YOLOv5 偵測 + 裁切
 from typing import Any, Dict, Optional, List, Tuple
 import os
 import uuid
-import torch
 
 # 依賴
 try:
@@ -29,24 +28,33 @@ from .ocr_utils import ocr_fields_from_crops
 
 
 # ---------- 模型路徑 ----------
-def _env_or_default(name: str, default_path: str) -> str:
-    p = os.environ.get(name, default_path)
-    if os.path.isfile(p):
+def _env_or_default(name: str, filename: str) -> str:
+    """
+    先讀環境變數，如果沒有就用專案根目錄下的 weights 資料夾。
+    """
+    p = os.environ.get(name, "")
+    if p and os.path.isfile(p):
         return p
-    # fallback：與此檔同層資料夾
+
+    # fallback：專案根目錄下的 weights
     here = os.path.dirname(os.path.abspath(__file__))
-    alt = os.path.join(here, os.path.basename(default_path))
-    return alt if os.path.isfile(alt) else p
+    root = os.path.dirname(here)  # b2b_st 專案根
+    weights_dir = os.path.join(root, "weights")
+    alt = os.path.join(weights_dir, filename)
+    return alt if os.path.isfile(alt) else filename
 
 
 MODEL_PATHS = {
-    "tr3": _env_or_default("YOLO_TR3", r"C:\\Users\\user\\Downloads\\tr3.pt"),
-    "pc":  _env_or_default("YOLO_PC",  r"C:\\Users\\user\\Downloads\\pc.pt"),
-    "op":  _env_or_default("YOLO_OP",  r"C:\\Users\\user\\Downloads\\op.pt"),
-    "mi":  _env_or_default("YOLO_MI",  r"C:\\Users\\user\\Downloads\\mi.pt"),
+    "tr3": _env_or_default("YOLO_TR3", "tr3.pt"),
+    "pc":  _env_or_default("YOLO_PC",  "pc.pt"),
+    "op":  _env_or_default("YOLO_OP",  "op.pt"),
+    "mi":  _env_or_default("YOLO_MI",  "mi.pt"),
 }
 
 DEFAULT_KEY_ORDER = ["num", "date", "sun", "cash"]
+
+# 啟動時印出路徑確認
+print("[YOLO MODEL PATHS]", MODEL_PATHS)
 
 
 # ---------- 小工具 ----------

@@ -248,13 +248,14 @@
   }
 
   /* ===================== 上傳並辨識 ===================== */
-    async function submitFiles() {
+  async function submitFiles() {
     if (selectedFiles.length === 0) {
       alert('請先選擇檔案');
       return;
     }
 
     disableActions(true);
+
     const formData = new FormData();
     selectedFiles.forEach((file) => formData.append('files', file));
 
@@ -273,15 +274,7 @@
         return;
       }
 
-      // ✅ 這裡改成「直接導向 result 頁」
-      if (payload.first) {
-        // 進度補滿（讓使用者感覺完整）
-        setProgress(selectedFiles.length, selectedFiles.length, true, '');
-        location.href = payload.first;   // ← 直接導向 /result/<filename>
-        return;
-      }
-
-      // 如果後端沒給 first（理論上不會），就退回原先的彈窗邏輯
+      // ✅ 成功：顯示「辨識結果編輯」彈窗（不自動跳 result.html）
       let results = payload.results || payload;
       if (!Array.isArray(results) || results.length === 0) {
         setProgress(selectedFiles.length || 0, selectedFiles.length || 0, true, '');
@@ -292,15 +285,19 @@
 
       recognizedResults = results.map(sanitizeRow);
       try { localStorage.setItem('recognizedResults', JSON.stringify(recognizedResults)); } catch {}
-      showRecognizeResults(recognizedResults);  // 備援：保留舊的彈窗
-      setProgress(selectedFiles.length || recognizedResults.length, selectedFiles.length || recognizedResults.length, true, '');
+      showRecognizeResults(recognizedResults);
+
+      setProgress(selectedFiles.length || recognizedResults.length,
+                  selectedFiles.length || recognizedResults.length,
+                  true, '');
       disableActions(false);
     } catch (err) {
       setProgress(0, selectedFiles.length || 0, true, err.message || '未知錯誤');
       disableActions(false);
-      alert('發生錯誤: ' + err.message);
+      alert('發生錯誤: ' + (err.message || err));
     }
   }
+
 
   /* ===================== 顯示結果（DOM API） ===================== */
   function showRecognizeResults(results) {

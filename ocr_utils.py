@@ -7,10 +7,6 @@ import re
 import os
 import pytesseract
 
-# --- Tesseract 路徑（依你機器） ---
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-os.environ["TESSDATA_PREFIX"] = r"C:\Program Files\Tesseract-OCR\tessdata"
-
 try:
     import cv2
 except Exception:
@@ -24,10 +20,19 @@ except Exception:
 # ========== 工具 ==========
 _MONTH = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,"jul":7,"aug":8,"sep":9,"sept":9,"oct":10,"nov":11,"dec":12}
 
+# ocr_utils.py
 def pdf_to_images(pdf_path: str, dpi: int = 300):
-    if convert_from_path is None: return []
-    try: return convert_from_path(pdf_path, dpi=dpi)
-    except Exception: return []
+    if convert_from_path is None:
+        return []
+    try:
+        poppler = os.environ.get("POPPLER_PATH")  # 由 core_app.py 設好
+        kwargs = {"dpi": dpi}
+        if poppler:
+            kwargs["poppler_path"] = poppler
+        return convert_from_path(pdf_path, **kwargs)
+    except Exception:
+        return []
+
 
 def _preprocess(img):
     if img is None: return None
@@ -115,14 +120,30 @@ def _clean_num(raw: str, inv_type: str) -> str:
     if not raw:
         return ""
     if inv_type == "mi":
-        # 若 OCR 錯把 O 輸出成 T，就轉回 O
-        if raw.startswith("T") and raw[1:].isdigit():
-            return "O" + raw[1:]
-        m = re.search(r"[A-Z]\d{5,}", raw)
+        s = re.sub(r"[^A-Z0-9]", "", (raw or "").upper())
+
+        # 👉 新增判斷：如果第一個字元是數字 0，就轉成 'O'
+        if s and s[0] == "0":
+            s = "O" + s[1:]
+
+        # 有開頭字母就沿用它
+        if s and s[0].isalpha():
+            letter = s[0]
+            digits = re.sub(r"\D", "", s[1:])
+            if letter == "O" and len(digits) >= 10 and digits[0] == "0":
+                digits = digits[1:]
+            if len(digits) >= 9:
+                return letter + digits[:9]
+
+        if s.isdigit():
+            return s[:9]
+
+        m = re.search(r"[A-Z]\d{9}", s)
         if m:
             return m.group(0)
-        if raw.isdigit():
-            return "O" + raw  # fallback 補 O
+        return s
+
+
     if inv_type == "op":
         m = re.search(r"[A-Z0-9\-]{6,}", raw)
         if m:
@@ -180,7 +201,7 @@ _PC_RULES: Dict[str, Union[Tuple[str,str], Tuple[str,str,int]]] = {
     "date": (r"開\s*立\s*日\s*期\s*[:：]\s*", r"\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}/\d{1,2}/\d{4}"),
     "sun":  (r"統\s*一\s*編\s*號\s*[:：]\s*", r"\d{8}"),
     # 只取「元」之前，允許逗點與空白，並縮小 window 避免吃到後面欄位
-    "cash": (r"交\s*易\s*金\s*額\s*[:：]\s*", r"([\d,\s]+)\s*元", 50),
+    "cash": (r"交\s*易\s*金\s*額\s*[:：]\s*", r"(\d{1,3}(?:,\d{3})*(?:\.\d+)?)", 25),
 }
 
 

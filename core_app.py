@@ -1,6 +1,6 @@
 # core_app.py
 import os
-from flask import Flask, render_template, send_from_directory
+from flask import Flask, send_from_directory, render_template
 import pytesseract
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -11,57 +11,52 @@ app = Flask(
     static_folder=os.path.join(ROOT, "static"),
 )
 
-# ===== Secret =====
+# 把可用的 endpoint 名稱清單提供給所有模板
+@app.context_processor
+def inject_endpoints():
+    # 例如：{'home', 'search', 'manual_invoice', ...}
+    return {
+        "endpoints": set(app.view_functions.keys()),
+        "has_endpoint": lambda ep: ep in app.view_functions,  # 可用在 if 判斷
+    }
+
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret")
 
-# ===== 路徑 & 權重設定（依你原本結構延伸成二階段） =====
+# core_app.py
 app.config.update(
     ROOT_DIR=ROOT,
     UPLOAD_FOLDER=os.path.join(ROOT, "uploads"),
     CROPPED_FOLDER=os.path.join(ROOT, "uploads", "cropped"),
-
-    # ▶ 二階段：先用 router 判定 pc/op/mi，再載入欄位模型
-    ROUTER_WEIGHTS=os.environ.get("ROUTER_WEIGHTS", r"C:\Users\user\Downloads\tr3.pt"),
-    PC_WEIGHTS    =os.environ.get("PC_WEIGHTS",     r"C:\Users\user\Downloads\pc.pt"),
-    OP_WEIGHTS    =os.environ.get("OP_WEIGHTS",     r"C:\Users\user\Downloads\op.pt"),
-    MI_WEIGHTS    =os.environ.get("MI_WEIGHTS",     r"C:\Users\user\Downloads\mi.pt"),
-
-    POPPLER_PATH=os.environ.get("POPPLER_PATH", r"D:\poppler\Library\bin"),
+    POPPLER_PATH=os.environ.get("POPPLER_PATH", r"C:\Users\user\Downloads\Release-24.08.0-0 (1)\poppler-24.08.0\Library\bin"),  # ← 修正拼字
     TESSERACT_CMD=os.environ.get("TESSERACT_CMD", r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
 )
 
-# 確保上傳資料夾存在
+# 讓 ocr_utils 可以用 os.environ 讀到
+os.environ["POPPLER_PATH"] = app.config["POPPLER_PATH"]       
+
 os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
 os.makedirs(app.config["CROPPED_FOLDER"], exist_ok=True)
 
-# Windows：指定 tesseract & tessdata
 pytesseract.pytesseract.tesseract_cmd = app.config["TESSERACT_CMD"]
-tessdata_dir = os.path.join(os.path.dirname(app.config["TESSERACT_CMD"]), "tessdata")
-os.environ["TESSDATA_PREFIX"] = tessdata_dir
+tess_dir = os.path.dirname(app.config["TESSERACT_CMD"])
+os.environ["TESSDATA_PREFIX"] = os.path.join(tess_dir, "tessdata")
 
-# ===== 基本頁 =====
+print("[CORE] ROOT_DIR         =", app.config["ROOT_DIR"])
+print("[CORE] UPLOAD_FOLDER    =", app.config["UPLOAD_FOLDER"])
+print("[CORE] CROPPED_FOLDER   =", app.config["CROPPED_FOLDER"])
+print("[CORE] POPPLER_PATH     =", app.config["POPPLER_PATH"])
+print("[CORE] TESSERACT_CMD    =", pytesseract.pytesseract.tesseract_cmd)
+print("[CORE] TESSDATA_PREFIX  =", os.environ.get("TESSDATA_PREFIX", ""))
+
 @app.route("/")
 def home():
-    # 你原有的首頁（保留 endpoint 名稱 'home'）
     return render_template("home.html")
 
-# 與 auto_inv.html 連結一致：回到上傳頁
-@app.route("/invoice/auto")
-def invoice_auto():
-    return render_template("auto_inv.html")
-
-# ===== 靜態檔案（原始與裁切）=====
+# ✅ 唯一版本（yr.py 不再定義同路徑）
 @app.route("/uploads/<path:filename>")
 def uploads(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
-# 舊名保留
 @app.route("/uploads/cropped/<path:filename>")
 def uploads_cropped(filename):
-    return send_from_directory(app.config["CROPPED_FOLDER"], filename)
-
-
-# 新名：配合 result.html 使用 url_for('uploaded_cropped_file', ...)
-@app.route("/uploaded/cropped/<path:filename>")
-def uploaded_cropped_file(filename):
     return send_from_directory(app.config["CROPPED_FOLDER"], filename)
