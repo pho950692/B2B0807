@@ -12,7 +12,7 @@ YOLOv5 偵測 + 裁切
 from typing import Any, Dict, Optional, List, Tuple
 import os
 import uuid
-
+from .ocr_utils import ocr_fields_from_crops, fullpage_anchor_ocr
 # 依賴
 try:
     import torch
@@ -90,24 +90,29 @@ def _load_yolo_model(model_path: str):
 def _map_class_to_key(model) -> Dict[int, str]:
     names = getattr(model, "names", None)
     mapping: Dict[int, str] = {}
+
+    def norm_to_key(n_lower: str) -> str:
+        if any(k in n_lower for k in ("num", "number", "invno", "invoice number", "invoice_number", "發票號碼")):
+            return "num"
+        if any(k in n_lower for k in ("date", "日期", "開立日期")):
+            return "date"
+        if any(k in n_lower for k in ("sun", "vat", "統一編號")):
+            return "sun"
+        if any(k in n_lower for k in ("cash", "amount", "price", "total", "交易金額", "金額")):
+            return "cash"
+        if n_lower in ("pc", "op", "mi"):
+            return n_lower
+        return ""
+
     if isinstance(names, (list, tuple)):
         for i, n in enumerate(names):
-            n_lower = str(n).lower()
-            for k in DEFAULT_KEY_ORDER:
-                if k in n_lower:
-                    mapping[i] = k
-                    break
-            if i not in mapping and n_lower in ("pc", "op", "mi"):
-                mapping[i] = n_lower
+            k = norm_to_key(str(n).lower())
+            if k: mapping[i] = k
     elif isinstance(names, dict):
         for i, n in names.items():
-            n_lower = str(n).lower()
-            for k in DEFAULT_KEY_ORDER:
-                if k in n_lower:
-                    mapping[int(i)] = k
-                    break
-            if int(i) not in mapping and n_lower in ("pc", "op", "mi"):
-                mapping[int(i)] = n_lower
+            k = norm_to_key(str(n).lower())
+            if k: mapping[int(i)] = k
+
     if not mapping:
         mapping = {i: DEFAULT_KEY_ORDER[i] for i in range(min(4, len(DEFAULT_KEY_ORDER)))}
     return mapping
@@ -166,7 +171,13 @@ def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: 
     tr3 = _load_yolo_model(MODEL_PATHS["tr3"])
     class_map = _map_class_to_key(tr3)
     with torch.no_grad():
-        res_tr3 = tr3(img_bgr)
+        # 放大到 960 比預設 640 更穩
+        try:
+            tr3.conf = float(os.environ.get("YOLO_CONF", 0.15))
+            tr3.iou  = float(os.environ.get("YOLO_IOU", 0.45))
+        except Exception:
+            pass
+        res_tr3 = tr3(img_bgr, size=960)
     det_tr3 = res_tr3.xyxy[0]
     inv = _choose_invoice_type(det_tr3, class_map) if inv_type == "auto" else inv_type.lower()
     if inv not in ("pc", "op", "mi"):
@@ -176,7 +187,13 @@ def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: 
     model_inv = _load_yolo_model(MODEL_PATHS[inv])
     field_map = _map_class_to_key(model_inv)
     with torch.no_grad():
-        res_fields = model_inv(img_bgr)
+        # ↓ 降信心門檻 + 放大輸入尺寸
+        try:
+            model_inv.conf = float(os.environ.get("YOLO_CONF", 0.20))  # 你原本就有 0.20，可保留
+            model_inv.iou  = float(os.environ.get("YOLO_IOU", 0.45))
+        except Exception:
+            pass
+        res_fields = model_inv(img_bgr, size=1280)
     det = res_fields.xyxy[0]
 
     # 3) 裁切
@@ -191,8 +208,20 @@ def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: 
         if _crop(img_bgr, (int(x1), int(y1), int(x2), int(y2)), out_path):
             crops.append({"key": key, "path": out_file})
 
-    # 4) OCR + 清洗
+    # 4) OCR + 清洗（小圖）
     fields = ocr_fields_from_crops({c["key"]: os.path.join(crops_dir, c["path"]) for c in crops}, inv)
+
+    # 4.1) 備援：小圖抓不到就用整頁錨點補
+    missing = [k for k in ("num","date","sun","cash") if not fields.get(k)]
+    need_fallback = (
+        (inv in ("mi", "op") and (len(missing) >= 2 or "sun" in missing))
+        or (inv == "pc" and "date" in missing)
+    )
+    if need_fallback:
+        fb = fullpage_anchor_ocr(img_bgr, inv)
+        for k in missing:
+            if fb.get(k):
+                fields[k] = fb[k]
 
     # 5) 裝上前端可用網址
     web_base = "/uploads/cropped"

@@ -21,7 +21,7 @@ except Exception:
 _MONTH = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,"jul":7,"aug":8,"sep":9,"sept":9,"oct":10,"nov":11,"dec":12}
 
 # ocr_utils.py
-def pdf_to_images(pdf_path: str, dpi: int = 300):
+def pdf_to_images(pdf_path: str, dpi: int = 400):
     if convert_from_path is None:
         return []
     try:
@@ -34,22 +34,45 @@ def pdf_to_images(pdf_path: str, dpi: int = 300):
         return []
 
 
+# --- 取代原本的 _preprocess 與 _read_as_text ---
 def _preprocess(img):
-    if img is None: return None
+    if img is None: 
+        return None
     g = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    g = cv2.resize(g, (g.shape[1]*2, g.shape[0]*2), interpolation=cv2.INTER_CUBIC)
-    g = cv2.threshold(g, 0, 255, cv2.THRESH_BINARY|cv2.THRESH_OTSU)[1]
+    # 小圖放大一點（對細字、點陣 PDF 很有幫助）
+    h, w = g.shape[:2]
+    scale = 3 if max(h, w) < 300 else 2
+    g = cv2.resize(g, (w*scale, h*scale), interpolation=cv2.INTER_CUBIC)
+    # 提升對比（CLAHE）+ 二值化 + 去噪
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    g = clahe.apply(g)
+    g = cv2.threshold(g, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
     g = cv2.medianBlur(g, 3)
     return g
 
-def _read_as_text(img_path: str, lang: str = "eng") -> str:
-    if pytesseract is None or cv2 is None: return ""
+def _read_as_text(img_path: str, lang: str = "eng", config: str = "") -> str:
+    if pytesseract is None or cv2 is None:
+        return ""
     img = cv2.imread(img_path)
-    if img is None: return ""
+    if img is None:
+        return ""
     proc = _preprocess(img)
-    if proc is None: return ""
-    t = pytesseract.image_to_string(proc, lang=lang)
+    if proc is None:
+        return ""
+    # 預設採用 --oem 1、--psm 6，適合單欄小區塊
+    base_cfg = "--oem 1 --psm 6"
+    if config:
+        base_cfg = f"{base_cfg} {config}"
+    t = pytesseract.image_to_string(proc, lang=lang, config=base_cfg)
     return (t or "").strip()
+
+# 針對數字/英數欄位的便捷讀取
+def _read_digits(img_path: str) -> str:
+    return _read_as_text(img_path, lang="eng", config="tessedit_char_whitelist=0123456789")
+
+def _read_alnum(img_path: str) -> str:
+    return _read_as_text(img_path, lang="eng", config="tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
+
 
 
 def _after_anchor(
@@ -228,22 +251,54 @@ def ocr_fields_from_crops(crops: Dict[str, str], inv_type: str) -> Dict[str, str
     inv = (inv_type or "pc").lower()
     out = {"num":"", "date":"", "sun":"", "cash":""}
 
+    # 先把四塊拼成一個大文本，配你已經寫好的錨點規則跑一次
     segs = []
     for k in ("num","date","sun","cash"):
         p = crops.get(k)
-        if p: segs.append(_read_as_text(p, lang="eng"))
+        if p:
+            # 大文本用一般英文字元，不限白名單（保留 anchor）
+            segs.append(_read_as_text(p, lang="eng"))
     pool = "\n".join([s for s in segs if s])
-
     if pool:
         out.update(_apply_rules(pool, inv))
 
-    if not out["num"]  and crops.get("num"):
-        out["num"]  = _clean_num(_read_as_text(crops["num"],  lang="eng"), inv)
-    if not out["date"] and crops.get("date"):
-        out["date"] = _clean_date(_read_as_text(crops["date"], lang="eng"))
-    if not out["sun"]  and crops.get("sun"):
-        out["sun"]  = _clean_sun(_read_as_text(crops["sun"],  lang="eng"))
-    if not out["cash"] and crops.get("cash"):
-        out["cash"] = _clean_cash(_read_as_text(crops["cash"], lang="eng"), inv)
+    # 接著逐欄位補強：針對各欄位使用對應的 tesseract 白名單
+    if crops.get("num") and not out["num"]:
+        if inv in ("mi", "op"):
+            out["num"] = _clean_num(_read_alnum(crops["num"]), inv)
+        else:  # pc
+            out["num"] = _clean_num(_read_alnum(crops["num"]), inv)
+
+    if crops.get("sun") and not out["sun"]:
+        out["sun"] = _clean_sun(_read_digits(crops["sun"]))
+
+    if crops.get("cash") and not out["cash"]:
+        # 金額允許逗點與小數點，先用英數白名單抓，再交給 _clean_cash
+        cash_raw = _read_as_text(crops["cash"], lang="eng",
+                                 config="tessedit_char_whitelist=0123456789.,元NTWD")
+        out["cash"] = _clean_cash(cash_raw, inv)
+
+    if crops.get("date") and not out["date"]:
+        # 日期保留英文字母（月名）與分隔符號
+        date_raw = _read_as_text(crops["date"], lang="eng",
+                                 config="tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/.-, ")
+        out["date"] = _clean_date(date_raw)
 
     return out
+
+def fullpage_anchor_ocr(img_bgr, inv_type: str):
+    if cv2 is None:
+        return {"num":"", "date":"", "sun":"", "cash":""}
+    inv = (inv_type or "").lower()
+    # PDF/英文化的票種用英文；台灣 PC 若要備援可用 chi_tra+eng
+    lang = "eng" if inv in ("mi", "op") else "chi_tra+eng"
+    proc = _preprocess(img_bgr)
+    txt = pytesseract.image_to_string(proc, lang=lang, config="--oem 1 --psm 6") if proc is not None else ""
+    out = _apply_rules(txt or "", inv)
+    # 再跑一次清洗，確保格式
+    out["num"]  = _clean_num(out.get("num",""), inv)
+    out["sun"]  = _clean_sun(out.get("sun",""))
+    out["cash"] = _clean_cash(out.get("cash",""), inv)
+    out["date"] = _clean_date(out.get("date",""))
+    return out
+
