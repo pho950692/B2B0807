@@ -122,6 +122,38 @@ def yr_upload():
 def yr_progress(job_id: str):
     return jsonify(PROGRESS.get(job_id) or {"status": "missing", "total": 0, "done": 0, "error": "", "finished": True})
 
+# === 相機 ===
+@app.route('/camera')
+def camera():
+    return render_template('camera.html')
+
+@app.route("/upload_camera", methods=["POST"])
+def upload_camera():
+    f = request.files.get("file")
+    if not f:
+        return jsonify({"error": "沒有收到檔案"}), 400
+
+    raw = secure_filename(f.filename or f"camera_{uuid.uuid4().hex}.jpg")
+    out_path = os.path.join(app.config["UPLOAD_FOLDER"], raw)
+    f.save(out_path)
+
+    # 直接跑 YOLO + OCR
+    info = detect_and_ocr(out_path, crops_dir=app.config["CROPPED_FOLDER"])
+    row = {
+        "filename": raw,
+        "imageUrl": url_for("uploads", filename=raw),
+        "num":  info.get("num",""),
+        "sun":  info.get("sun",""),
+        "date": info.get("date",""),
+        "cash": info.get("cash",""),
+        "bnu":  "",
+        "name": "",
+        "add":  ""
+    }
+    return jsonify([row])
+
+
+
 # === 結果頁（推裁切圖）===
 @app.route("/result/<path:filename>", methods=["GET"], endpoint="yr_result")
 def yr_result(filename: str):

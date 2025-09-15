@@ -16,7 +16,29 @@ try:
 except Exception:
     convert_from_path = None
 
+def fix_pc_invoice_num(num: str) -> str:
+    if not num:
+        return num
+    num = num.strip().upper()
 
+    # 若長度不正確，直接回傳原值
+    if len(num) != 10:
+        return num
+
+    # 取前兩碼
+    first2 = list(num[:2])
+    mapping = {'0':'O','6':'G','8':'B','1':'I','2':'Z'}
+
+    for i, ch in enumerate(first2):
+        if ch.isdigit() and ch in mapping:
+            first2[i] = mapping[ch]
+
+    fixed_num = ''.join(first2) + num[2:]
+
+    # 確認格式是否為 2 英文字母 + 8 數字
+    if re.match(r'^[A-Z]{2}\d{8}$', fixed_num):
+        return fixed_num
+    return num
 # ========== 工具 ==========
 _MONTH = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,"jul":7,"aug":8,"sep":9,"sept":9,"oct":10,"nov":11,"dec":12}
 
@@ -143,12 +165,6 @@ def _clean_year_range(yyyy_mm_dd: str) -> str:
     y = int(m.group(1))
     return yyyy_mm_dd if 1900 <= y <= 2100 else ""
 
-def _clean_price(s: str) -> str:
-    if not s: return ""
-    s = (s.splitlines() or [""])[0]
-    s = re.sub(r"[A-Za-z$€£¥NTWDusd,\s]", "", s)
-    m = re.search(r"\d+(?:\.\d+)?", s)
-    return m.group(0) if m else ""
 
 def _keep_digits(s: str) -> str:
     return re.sub(r"\D+", "", s or "")
@@ -201,8 +217,8 @@ def _clean_num(raw: str, inv_type: str) -> str:
         # 放寬 PC 發票號碼格式：英數字 + 可含破折號，至少 6 碼
         m = re.search(r"[A-Z0-9\-]{6,}", raw)
         if m:
-            return m.group(0)
-
+            candidate = m.group(0)
+            return fix_pc_invoice_num(candidate)
 
 def _clean_sun(raw: str) -> str:
     m = re.search(r"(?<!\d)\d{8}(?!\d)", raw or "")
@@ -255,7 +271,7 @@ _PC_RULES: Dict[str, Union[Tuple[str,str], Tuple[str,str,int]]] = {
     "sun":  (r"(統\s*一\s*編\s*號|統一編號)[:：]?\s*", r"\d{8}"),
 
     # 交易金額：允許「交易金額」或「交 易 金 額」
-    "cash": (r"(交\s*易\s*金\s*額|交易金額)[:：]?\s*", r"(\d{1,3}(?:,\d{3})*(?:\.\d+)?)", 120),
+    "cash": (r"(交\s*易\s*金\s*額|交易金額)[:：]?\s*", r"(\d{1,3}(?:,\d{3})*(?:\.\d+)?)", 50),
 }
 
 
@@ -315,6 +331,9 @@ def ocr_fields_from_crops(crops: Dict[str, str], inv_type: str) -> Dict[str, str
         date_raw = _read_as_text(crops["date"], lang="eng",
                                  config="tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/.-, ")
         out["date"] = _clean_date(date_raw)
+    # ---- 最後補強 PC 發票號碼格式 ----
+    if inv == "pc" and out.get("num"):
+        out["num"] = fix_pc_invoice_num(out["num"])
 
     return out
 
