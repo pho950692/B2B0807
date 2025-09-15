@@ -12,7 +12,7 @@ YOLOv5 偵測 + 裁切
 from typing import Any, Dict, Optional, List, Tuple
 import os
 import uuid
-from .ocr_utils import ocr_fields_from_crops, fullpage_anchor_ocr
+from yocr.ocr_utils import ocr_fields_from_crops, fullpage_anchor_ocr
 # 依賴
 try:
     import torch
@@ -23,8 +23,6 @@ try:
     import cv2
 except Exception:
     cv2 = None
-
-from .ocr_utils import ocr_fields_from_crops
 
 
 # ---------- 模型路徑 ----------
@@ -131,6 +129,14 @@ def _choose_invoice_type(det, mapping_from_names: Dict[int, str]) -> str:
     fallback = ["pc", "op", "mi"]
     return fallback[cls_idx] if cls_idx < len(fallback) else "pc"
 
+def _pad_box(x1, y1, x2, y2, W, H, l=0.0, t=0.0, r=0.0, b=0.0):
+    """依比例對框做左右上下 padding；比例是相對於框寬/高。"""
+    bw, bh = (x2 - x1), (y2 - y1)
+    x1 = max(0, int(x1 - l * bw))
+    y1 = max(0, int(y1 - t * bh))
+    x2 = min(W - 1, int(x2 + r * bw))
+    y2 = min(H - 1, int(y2 + b * bh))
+    return x1, y1, x2, y2
 
 def _crop(img_bgr, box: Tuple[int, int, int, int], out_path: str) -> bool:
     if cv2 is None or img_bgr is None or box is None:
@@ -198,11 +204,25 @@ def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: 
 
     # 3) 裁切
     crops: List[Dict[str, str]] = []
+    H, W = img_bgr.shape[:2]
     for row in det.tolist():
         x1, y1, x2, y2, conf, cls = row
         key = field_map.get(int(cls))
         if key not in ("num", "date", "sun", "cash"):
             continue
+
+        # 👉 這裡新增
+        if inv == "op" and key == "num":
+            H, W = img_bgr.shape[:2]
+            x1, y1, x2, y2 = _pad_box(int(x1), int(y1), int(x2), int(y2),
+                                       W, H, l=0.05, t=0.02, r=0.45, b=0.02)
+            
+        if inv == "pc" and key in ("num", "cash"):
+            x1, y1, x2, y2 = _pad_box(
+                int(x1), int(y1), int(x2), int(y2), W, H,
+                l=0.05, t=0.02, r=(0.30 if key == "num" else 0.20), b=0.02
+            )
+
         out_file = f"{base_name}_{nonce}_{key}.jpg"
         out_path = os.path.join(crops_dir, out_file)
         if _crop(img_bgr, (int(x1), int(y1), int(x2), int(y2)), out_path):
@@ -215,7 +235,7 @@ def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: 
     missing = [k for k in ("num","date","sun","cash") if not fields.get(k)]
     need_fallback = (
         (inv in ("mi", "op") and (len(missing) >= 2 or "sun" in missing))
-        or (inv == "pc" and "date" in missing)
+        or (inv == "pc" and any(k in missing for k in ("num", "cash", "date")))
     )
     if need_fallback:
         fb = fullpage_anchor_ocr(img_bgr, inv)

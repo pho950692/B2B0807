@@ -115,11 +115,14 @@
     if (i !== -1) t = t.slice(0,i+1) + t.slice(i+1).replace(/\./g,''); return t;
   }
   function sanitizeRow(row){
-    const r = { ...row };
-    if (!r.sun)  r.sun  = r.snu  || '';
-    if (!r.cash) r.cash = r.price|| '';
-    return r;
-  }  
+      const r = { ...row };
+      if (!r.sun)   r.sun   = r.snu   || '';
+      if (!r.snu)   r.snu   = r.sun   || '';
+      if (!r.cash)  r.cash  = r.price || '';
+      if (!r.price) r.price = r.cash  || '';
+      if (!r.num)   r.num   = r.number|| '';
+      return r;
+    }
 
   /* ===================== 狀態元素 ===================== */
   const fileTableBody    = document.getElementById('fileTableBody');

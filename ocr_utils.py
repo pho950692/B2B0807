@@ -34,6 +34,25 @@ def pdf_to_images(pdf_path: str, dpi: int = 400):
         return []
 
 
+
+def fix_mi_invoice_num(text: str) -> str:
+    if not text:
+        return text
+
+    t = re.sub(r'[^A-Za-z0-9]', '', text)
+    if len(t) < 10:
+        return t
+
+    head, tail = t[0], t[1:10]
+    if head.isdigit():
+        mapping = {"0": "O", "6": "G", "8": "B", "1": "I", "2": "Z"}
+        head = mapping.get(head, head)
+
+    head = head.upper()
+    tail = re.sub(r'\D', '', tail)[:9]
+
+    return head + tail
+
 # --- 取代原本的 _preprocess 與 _read_as_text ---
 def _preprocess(img):
     if img is None: 
@@ -71,8 +90,10 @@ def _read_digits(img_path: str) -> str:
     return _read_as_text(img_path, lang="eng", config="tessedit_char_whitelist=0123456789")
 
 def _read_alnum(img_path: str) -> str:
-    return _read_as_text(img_path, lang="eng", config="tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
-
+    return _read_as_text(
+        img_path, lang="eng",
+        config="tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-"
+    )
 
 
 def _after_anchor(
@@ -145,38 +166,42 @@ def _clean_num(raw: str, inv_type: str) -> str:
     if inv_type == "mi":
         s = re.sub(r"[^A-Z0-9]", "", (raw or "").upper())
 
-        # 👉 新增判斷：如果第一個字元是數字 0，就轉成 'O'
-        if s and s[0] == "0":
-            s = "O" + s[1:]
+        if not s:
+            return ""
 
-        # 有開頭字母就沿用它
-        if s and s[0].isalpha():
-            letter = s[0]
-            digits = re.sub(r"\D", "", s[1:])
-            if letter == "O" and len(digits) >= 10 and digits[0] == "0":
-                digits = digits[1:]
-            if len(digits) >= 9:
-                return letter + digits[:9]
+        # ✅ 如果第一碼是數字 → 依照規則轉換
+        if s[0].isdigit():
+            mapping = {"0": "O", "6": "G", "8": "B", "1": "I", "2": "Z"}
+            first = mapping.get(s[0], s[0])
+        else:
+            first = s[0]
 
-        if s.isdigit():
-            return s[:9]
+        # 後 9 碼只保留數字
+        digits = re.sub(r"\D", "", s[1:])
+        digits = digits[:9]
 
-        m = re.search(r"[A-Z]\d{9}", s)
-        if m:
-            return m.group(0)
-        return s
+        if len(digits) < 9:
+            return first + digits  # 不足9碼就返回現有
 
+        return first + digits
 
     if inv_type == "op":
+        # 專門抓 "英數混合-英數混合" 格式 (至少3碼-至少2碼)
+        m = re.search(r"[A-Z0-9]{3,}-[A-Z0-9]{2,}", raw)
+        if m:
+            fixed = _deconfuse_alnum_for_op(m.group(0))
+            return fixed
+
+        # 備援：允許至少 6 碼以上的英數混合 (避免沒抓到)
         m = re.search(r"[A-Z0-9\-]{6,}", raw)
         if m:
             fixed = _deconfuse_alnum_for_op(m.group(0))
             return fixed
     if inv_type == "pc":
-        m = re.search(r"[A-Z]{2}\d{8}", raw)
+        # 放寬 PC 發票號碼格式：英數字 + 可含破折號，至少 6 碼
+        m = re.search(r"[A-Z0-9\-]{6,}", raw)
         if m:
             return m.group(0)
-    return raw
 
 
 def _clean_sun(raw: str) -> str:
@@ -220,11 +245,17 @@ _OP_RULES: Dict[str, Union[Tuple[str,str], Tuple[str,str,int]]] = {
 }
 
 _PC_RULES: Dict[str, Union[Tuple[str,str], Tuple[str,str,int]]] = {
-    "num":  (r"發\s*票\s*號\s*碼\s*[:：]\s*", r"[A-Z0-9]{2}\d{8}|[A-Z0-9\-]+"),
-    "date": (r"開\s*立\s*日\s*期\s*[:：]\s*", r"\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}/\d{1,2}/\d{4}"),
-    "sun":  (r"統\s*一\s*編\s*號\s*[:：]\s*", r"\d{8}"),
-    # 只取「元」之前，允許逗點與空白，並縮小 window 避免吃到後面欄位
-    "cash": (r"交\s*易\s*金\s*額\s*[:：]\s*", r"(\d{1,3}(?:,\d{3})*(?:\.\d+)?)", 25),
+    # 發票號碼：允許「發票號碼」或「發 票 號 碼」
+    "num":  (r"(發\s*票\s*號\s*碼|發票號碼)[:：]?\s*", r"[A-Z0-9]{2}\d{8}|[A-Z0-9\-]+"),
+
+    # 開立日期：允許「開立日期」或「開 立 日 期」
+    "date": (r"(開\s*立\s*日\s*期|開立日期)[:：]?\s*", r"\d{4}[./-]\d{1,2}[./-]\d{1,2}|\d{1,2}/\d{1,2}/\d{4}"),
+
+    # 統一編號：允許「統一編號」或「統 一 編 號」
+    "sun":  (r"(統\s*一\s*編\s*號|統一編號)[:：]?\s*", r"\d{8}"),
+
+    # 交易金額：允許「交易金額」或「交 易 金 額」
+    "cash": (r"(交\s*易\s*金\s*額|交易金額)[:：]?\s*", r"(\d{1,3}(?:,\d{3})*(?:\.\d+)?)", 120),
 }
 
 
@@ -257,7 +288,8 @@ def ocr_fields_from_crops(crops: Dict[str, str], inv_type: str) -> Dict[str, str
         p = crops.get(k)
         if p:
             # 大文本用一般英文字元，不限白名單（保留 anchor）
-            segs.append(_read_as_text(p, lang="eng"))
+            lang_pool = "eng" if inv in ("mi", "op") else "chi_tra+eng"
+            segs.append(_read_as_text(p, lang=lang_pool))
     pool = "\n".join([s for s in segs if s])
     if pool:
         out.update(_apply_rules(pool, inv))
@@ -301,4 +333,3 @@ def fullpage_anchor_ocr(img_bgr, inv_type: str):
     out["cash"] = _clean_cash(out.get("cash",""), inv)
     out["date"] = _clean_date(out.get("date",""))
     return out
-

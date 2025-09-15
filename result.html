@@ -139,16 +139,15 @@
     // 把畫面上的欄位組成一筆
     const get = k => (document.querySelector(`input[data-key="${k}"]`)?.value || '').trim();
     const one = {
-      num:  get('num'),
-      sun:  get('sun')  || get('snu'),
-      date: get('date'),
-      cash: get('cash') || get('price'),
-      // 相容舊後端（可以保留）
-      snu:  get('sun')  || get('snu'),
-      price:get('cash') || get('price'),
-      bnu:  get('bnu'),
-      name: get('name'),
-      add:  get('add')
+      num:   get('num')  || get('number'),   // 保險：多加一層 number
+      sun:   get('sun')  || get('snu'),
+      date:  get('date'),
+      cash:  get('cash') || get('price'),
+      snu:   get('sun')  || get('snu'),
+      price: get('price')|| get('cash'),     // 🔄 這裡改成互相兜底
+      bnu:   get('bnu'),
+      name:  get('name'),
+      add:   get('add')
     };
 
     try{
