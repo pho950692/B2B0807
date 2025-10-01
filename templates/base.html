@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>{% block title %}fastB2B 系統{% endblock %}</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block head_extra %}{% endblock %}
+</head>
+
+<body class="bg-gray-100 text-[18px] text-black min-h-screen flex flex-col">
+
+  <!-- 讓 header+nav 黏在上方（不改原本間距）：sticky 會保留原本佔位 -->
+  <div class="sticky top-0 z-40 bg-white shadow">
+
+    <!-- Header -->
+    <header class="flex items-center justify-between bg-white px-6 py-4 border-b border-gray-300">
+      <div class="flex items-center space-x-4">
+        <img
+          src="{{ url_for('static', filename='photo/logo.webp') }}"
+          onerror="this.onerror=null;this.src='{{ url_for('static', filename='photo/logo.png') }}'"
+          alt="logo"
+          class="h-12">
+        <h1 class="text-3xl font-bold text-blue-700">fastB2B</h1>
+      </div>
+      <div class="text-lg font-semibold">
+        {% if 'user_id' in session %}
+          <span class="text-blue-700 mr-4">Hi, {{ session.username }}</span>
+          <a href="{{ url_for('logout') }}" class="text-red-600 hover:underline">登出</a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="text-blue-700 hover:underline mr-4">登入</a>
+          <a href="{{ url_for('register') }}" class="text-blue-700 hover:underline">註冊</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="bg-gradient-to-r from-blue-600 to-blue-500 px-[5cm] py-1">
+      {% set MENUS = [
+        {"title": "廠商管理", "items": [("vendor_manage", "公司資料維護"), ("add_vendor", "手動新增公司")]},
+        {"title": "發票管理", "items": [("search", "發票紀錄查詢")]},
+        {"title": "辨識發票", "items": [("manual_invoice", "手動新增發票"), ("invoice_auto", "自動辨識發票")]},
+        {"title": "帳務管理", "items": [("inv_re", "統計報表")]},
+        {"title": "其他", "items": [("home", "首頁"), ("preferences", "設定"), ("account_edit", "帳號資料修改")]}
+      ] %}
+
+      {% if session.get('role') == 'admin' %}
+        {% set MENUS = MENUS + [
+          {"title": "管理員專區", "items": [("admin_dashboard", "管理員面板")]}
+        ] %}
+      {% endif %}
+
+      <ul class="flex justify-between">
+        {% for menu in MENUS %}
+        <li class="relative group">
+          <a href="#" class="block px-6 py-3 text-white font-semibold text-lg hover:bg-blue-800 rounded">
+            {{ menu.title }}
+          </a>
+          <ul class="dropdown-menu">
+            {% for endpoint, label in menu['items'] %}
+              {% if endpoint in endpoints %}
+                <li>
+                  <a href="{{ url_for(endpoint) }}"
+                    class="{% if request.endpoint == endpoint %}active{% endif %}">
+                    {{ label }}
+                  </a>
+                </li>
+              {% endif %}
+            {% endfor %}
+            {% if menu.title == '其他' %}
+              <li>
+                <a href="#" id="guideTourBtn" class="block px-6 py-3 text-gray-700 hover:bg-blue-100 font-semibold text-lg">
+                  新手教學
+                </a>
+              </li>
+  <!-- 新手教學 Modal -->
+  <div id="guideTourModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-xl shadow-xl p-8 w-full max-w-xl relative">
+      <button onclick="document.getElementById('guideTourModal').classList.add('hidden')" class="absolute top-4 right-6 text-2xl text-gray-500 hover:text-black">&times;</button>
+      <h2 class="text-2xl font-bold mb-4 text-blue-700">新手教學</h2>
+      <ul class="list-disc pl-6 space-y-2 text-lg">
+        <li>快速查詢發票、管理公司資料。</li>
+        <li>可手動或自動辨識發票，支援 JPG/PNG/PDF。</li>
+        <li>發票辨識完成後可下載 Excel 或預覽圖片。</li>
+        <li>帳號、設定、統計報表都在上方選單。</li>
+        <li>如遇問題可聯絡管理員或查看說明文件。</li>
+      </ul>
+    </div>
+  </div>
+  <script>
+    document.addEventListener('DOMContentLoaded', function(){
+      var btn = document.getElementById('guideTourBtn');
+      var modal = document.getElementById('guideTourModal');
+      if(btn && modal){
+        btn.addEventListener('click', function(e){
+          e.preventDefault();
+          modal.classList.remove('hidden');
+        });
+      }
+    });
+  </script>
+            {% endif %}
+          </ul>
+        </li>
+        {% endfor %}
+      </ul>
+    </nav>
+  </div>
+
+  <!-- Guided Tour Banner -->
+  <!-- 新手導覽已移至設定頁 -->
+
+  <!-- User Prompt -->
+  {% if 'user_id' in session %}
+  <div class="bg-blue-50 border border-blue-200 text-blue-700 py-3 px-6 text-center">
+    <i class="fas fa-user-circle mr-2"></i>歡迎回來，{{ session.username }}！快速前往：
+    {% if 'invoice_auto' in endpoints %}
+      <a href="{{ url_for('invoice_auto') }}" class="underline hover:text-blue-900 mx-2">
+        <i class="fas fa-file-upload"></i> 發票辨識
+      </a> |
+    {% endif %}
+    {% if 'search' in endpoints %}
+      <a href="{{ url_for('search') }}" class="underline hover:text-blue-900 mx-2">
+        <i class="fas fa-search"></i> 查詢發票
+      </a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Main -->
+  <main class="flex-grow w-full px-4 sm:px-6 lg:px-12 xl:px-20 py-8">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="mb-6">
+          {% for message in messages %}
+            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-2">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      const msg = document.getElementById("toast-message");
+      if (!toast || !msg) return;
+      msg.textContent = message;
+      toast.classList.remove("hidden");
+      setTimeout(() => toast.classList.add("hidden"), 3000);
+    }
+  </script>
+</body>
+</html>

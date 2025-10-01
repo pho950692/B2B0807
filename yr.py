@@ -4,7 +4,7 @@ import os, uuid, sys, glob
 from typing import Dict, Any, List
 from pathlib import Path
 from werkzeug.utils import secure_filename
-from flask import request, jsonify, render_template, url_for, flash
+from flask import request, jsonify, render_template, url_for, flash, send_from_directory
 from core_app import app  # 只使用 core_app 的 app
 
 # 路徑
@@ -25,6 +25,19 @@ try:
 except ModuleNotFoundError:
     from yolo import detect_and_ocr
     from ocr_utils import pdf_to_images
+
+VENDOR_NAME_MAP = {
+    'mi': 'Microsoft',
+    'op': 'OpenAI',
+    'pc': 'PChome',
+}
+
+def _enrich_vendor_name(one: dict):
+    # 可能有的鍵名：label / cls / type，依你的回傳結構調整
+    label = (one.get('label') or one.get('cls') or one.get('type') or '').lower()
+    if not one.get('name') and label in VENDOR_NAME_MAP:
+        one['name'] = VENDOR_NAME_MAP[label]
+    return one
 
 # === 內部工具 ===
 PROGRESS: Dict[str, Dict[str, Any]] = {}
@@ -53,8 +66,9 @@ def _find_crop(filename: str, key: str) -> str:
 # === 首頁 ===
 @app.route("/invoice/auto", methods=["GET"], endpoint="invoice_auto")
 def yr_home():
-    # 依你專案模板名稱（你之前是 auto_inv.html / 或 invoice_auto.html）
-    return render_template("auto_inv.html")
+    # 取得最近一次辨識結果
+    results = LAST_RESULTS if LAST_RESULTS else []  # 依你專案模板名稱（你之前是 auto_inv.html / 或 invoice_auto.html）
+    return render_template("auto_inv.html", results=results)
 
 # === 上傳與辨識 ===
 @app.route("/upload", methods=["POST"], endpoint="yr_upload")
@@ -88,20 +102,19 @@ def yr_upload():
                 f.save(out_path)
 
             info = detect_and_ocr(out_path, crops_dir=str(CROPS_DIR))
-
-            # ✅ 用 core_app 的 uploads endpoint
-            img_url = url_for("uploads", filename=out_name)
+            conf = info.get("conf", {})  # YOLO信心分數 dict
             row = {
                 "origin":   raw,
                 "filename": out_name,
-                "imageUrl": img_url,
+                "imageUrl": url_for("uploads", filename=out_name),
                 "type":     info.get("type", ""),
                 "num":      info.get("num", ""),
                 "sun":      info.get("sun", ""),
                 "date":     info.get("date", ""),
                 "cash":     info.get("cash", ""),
+                "score":    conf,  # 直接回傳 YOLO信心分數 dict
                 "bnu":      "",
-                "name":     "",
+                "name":     VENDOR_NAME_MAP.get((info.get("type") or "").lower(), ""),
                 "add":      "",
             }
             results.append(row)
@@ -147,7 +160,7 @@ def upload_camera():
         "date": info.get("date",""),
         "cash": info.get("cash",""),
         "bnu":  "",
-        "name": "",
+        "name": VENDOR_NAME_MAP.get((info.get("type") or "").lower(), ""),
         "add":  ""
     }
     return jsonify([row])
@@ -179,9 +192,31 @@ def yr_result(filename: str):
     return render_template("result.html", result=row, texts=texts)
 
 # === 即時重跑一張（保證最新）===
+# yr.py
 @app.route("/result/detail/<path:imgname>")
 def result_detail(imgname):
     ocr = detect_and_ocr(str(UPLOAD_DIR / imgname), crops_dir=str(CROPS_DIR))
-    # ✅ 用 core_app 的 uploads_cropped endpoint
-    crops_map = {c["key"]: url_for("uploads_cropped", filename=c["path"]) for c in ocr.get("crops", [])}
-    return render_template("result.html", data=ocr, crops=crops_map)
+
+    # YOLO 已回傳 {"key":..., "path": 檔名}；模板會用 url_for('uploads_cropped', filename=item.cropped_image)
+    crop_by_key = {c["key"]: c.get("path") for c in ocr.get("crops", [])}
+
+    texts = [
+        {"label": "發票號碼", "text": ocr.get("num",""),  "key":"num",  "cropped_image": crop_by_key.get("num","")},
+        {"label": "統一編號", "text": ocr.get("sun",""),  "key":"sun",  "cropped_image": crop_by_key.get("sun","")},
+        {"label": "日期",     "text": ocr.get("date",""), "key":"date", "cropped_image": crop_by_key.get("date","")},
+        {"label": "價格",     "text": ocr.get("cash",""), "key":"cash", "cropped_image": crop_by_key.get("cash","")},
+        {"label": "買方編號", "text": "", "key":"bnu"},
+        {"label": "公司名稱", "text": VENDOR_NAME_MAP.get((ocr.get("type") or "").lower(), ""), "key":"name"},
+        {"label": "公司地址", "text": "", "key":"add"},
+    ]
+
+    row = {
+        "filename": imgname,
+        "imageUrl": url_for("uploads", filename=imgname)
+    }
+    return render_template("result.html", result=row, texts=texts)
+
+# === 最近一次辨識結果 API ===
+@app.route('/progress/last', methods=['GET'])
+def progress_last():
+    return jsonify({"results": LAST_RESULTS})

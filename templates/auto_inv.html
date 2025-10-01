@@ -1,0 +1,872 @@
+{% extends "base.html" %}
+
+{% block title %}辨識發票 - fastB2B{% endblock %}
+
+{% block head_extra %}
+  {% if 'user_id' not in session %}
+    <script>alert('⚠️ 提醒：你尚未登入，辨識結果不會儲存到系統');</script>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-xl p-10 mt-10 animate__animated animate__fadeIn text-base md:text-lg">
+  <h2 class="text-4xl font-extrabold text-blue-700 mb-4 flex items-center justify-center drop-shadow">
+    <i class="fas fa-file-invoice mr-3"></i> 自動辨識發票
+  </h2>
+  <p class="text-lg text-gray-700 mb-6 text-center font-semibold">支援 JPG / PNG / PDF，多檔拖曳上傳，自動裁切與 AI 文字辨識，快速完成發票資料建檔。</p>
+
+  <!-- 使用流程圖示 -->
+  <div class="grid grid-cols-4 gap-8 mb-8">
+    <div class="flex flex-col items-center">
+      <div class="text-3xl mb-2">📤</div>
+      <div class="text-blue-700 font-bold">選擇檔案</div>
+      <div class="text-gray-500 text-sm">支援多檔拖曳、資料夾選取</div>
+    </div>
+    <div class="flex flex-col items-center">
+      <div class="text-3xl mb-2">🤖</div>
+      <div class="text-blue-700 font-bold">AI辨識</div>
+      <div class="text-gray-500 text-sm">自動偵測欄位、辨識文字</div>
+    </div>
+    <div class="flex flex-col items-center">
+      <div class="text-3xl mb-2">🗂️</div>
+      <div class="text-blue-700 font-bold">編輯/確認</div>
+      <div class="text-gray-500 text-sm">可人工修正、批次儲存</div>
+    </div>
+    <div class="flex flex-col items-center">
+      <div class="text-3xl mb-2">📈</div>
+      <div class="text-blue-700 font-bold">匯出/串接</div>
+      <div class="text-gray-500 text-sm">Excel/CSV 匯出，ERP串接</div>
+    </div>
+  </div>
+
+  <!-- 重點提示 -->
+  <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded mb-8">
+    <ul class="list-disc pl-6 text-blue-700 text-base space-y-1">
+      <li>建議圖片解析度 300dpi 以上，檔案大小每張不超過 10MB。</li>
+      <li>系統自動辨識發票號碼、統一編號、日期、金額等主要欄位。</li>
+      <li>辨識率低時可人工修正，再儲存到系統。</li>
+      <li>如遇辨識失敗，請檢查影像清晰度或聯絡管理員。</li>
+    </ul>
+  </div>
+
+  <div class="mb-8 flex flex-wrap gap-4 items-center justify-center">
+    <input type="file" id="filePicker" class="hidden" multiple accept=".jpg,.jpeg,.png,.pdf,image/*" />
+    <input type="file" id="folderPicker" class="hidden" webkitdirectory directory accept=".jpg,.jpeg,.png,.pdf,image/*" />
+    <button id="btnPickFiles" onclick="document.getElementById('filePicker').click()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 text-lg px-6 py-3 rounded-lg font-bold shadow">
+      <i class="fas fa-upload mr-2"></i> 選擇檔案
+    </button>
+    <button id="btnPickFolder" onclick="document.getElementById('folderPicker').click()" class="bg-blue-100 hover:bg-blue-200 text-blue-700 text-lg px-6 py-3 rounded-lg font-bold shadow">
+      <i class="fas fa-folder-open mr-2"></i> 選擇資料夾
+    </button>
+    <a href="/camera" class="bg-green-600 hover:bg-green-700 text-white text-lg px-6 py-3 rounded-lg font-bold shadow inline-flex items-center">
+      <i class="fas fa-camera mr-2"></i> 開啟鏡頭
+    </a>
+  </div>
+
+  <!-- 空狀態插圖 -->
+  <div id="emptyState" class="flex flex-col items-center justify-center py-12 text-gray-400" style="display:none;">
+    <div class="text-7xl mb-4">🖼️</div>
+    <div class="text-xl mb-2">尚未選擇檔案，請先點選上方按鈕上傳發票圖片或 PDF。</div>
+    <div class="text-base">支援多檔拖曳、資料夾選取，或使用鏡頭拍照。</div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <div class="mb-4" id="overallAccBox" style="display:none;">
+      <span id="overallAcc" class="inline-block bg-emerald-600 text-white text-sm px-3 py-1 rounded-full">
+        總辨識率：--
+      </span>
+    </div>
+    <table class="w-full border border-gray-300 text-center text-base" id="fileTable">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="border px-4 py-2">檔案名稱</th>
+          <th class="border px-4 py-2">日期</th>
+          <th class="border px-4 py-2">辨識率</th>
+          <th class="border px-4 py-2">操作</th>
+          <th class="border px-4 py-2">預覽</th>
+        </tr>
+      </thead>
+      <tbody id="fileTableBody">
+        {% for row in results %}
+        <tr>
+          <td class="border px-4 py-2">{{ row.origin }}</td>
+          <td class="border px-4 py-2">{{ row.date }}</td>
+          <td class="border px-4 py-2">
+            {% if row.score %}
+              {{ (row.score.values()|sum / (row.score.values()|length) * 100) | round(0) }}%
+            {% else %}
+              0%
+            {% endif %}
+          </td>
+          <td class="border px-4 py-2">
+            <a href="{{ url_for('yr_result', filename=row.filename) }}" class="text-blue-600 underline">詳細</a>
+          </td>
+          <td class="border px-4 py-2">
+            <img src="{{ row.imageUrl }}" alt="預覽" class="h-12 rounded border" />
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-6 flex justify-end gap-4">
+    <a href="/" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded text-base">回首頁</a>
+    <button id="btnClearAll" onclick="clearAllFiles()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-base">全部清除</button>
+    <button id="btnStart" onclick="submitFiles()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-base font-semibold">開始辨識</button>
+  </div>
+
+  <!-- 進度條區塊 -->
+  <div class="mt-4 p-3 border rounded bg-gray-50">
+    <div class="w-full bg-gray-200 rounded h-3 overflow-hidden">
+      <div id="progressBar" class="bg-blue-600 h-3 transition-all duration-300" style="width:0%"></div>
+    </div>
+    <div class="mt-2 text-sm text-gray-700 flex items-center gap-3">
+      <span id="progressStatus">等待開始…</span>
+      <span id="progressCounter" class="px-2 py-0.5 rounded bg-blue-100 text-blue-700">0 / 0</span>
+      <span id="progressPercent" class="px-2 py-0.5 rounded bg-gray-100 text-gray-700">0%</span>
+    </div>
+  </div>
+
+  <div id="pagination" class="mt-4 flex justify-center space-x-2"></div>
+</div>
+
+<!-- 辨識結果彈窗 -->
+<div id="resultModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+  <div class="bg-white rounded-lg shadow-xl w-[95%] max-w-[95%] max-h-[90vh] p-6 overflow-x-auto overflow-y-auto relative">
+    <div class="mb-4" id="modalOverallAccBox" style="display:none;">
+      <span id="modalOverallAcc" class="inline-block bg-emerald-600 text-white text-sm px-3 py-1 rounded-full">
+        總辨識率：--
+      </span>
+    </div>
+    <h2 class="text-3xl font-bold mb-4"><i class="fas fa-edit mr-2"></i> 辨識結果編輯</h2>
+    <table class="w-full border border-gray-300 text-center text-base min-w-max">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="border px-4 py-2">圖片檔名</th>
+          <th class="border px-4 py-2">發票號碼</th>
+          <th class="border px-4 py-2">統一編號</th>
+          <th class="border px-4 py-2">日期</th>
+          <th class="border px-4 py-2">價格</th>
+          <th class="border px-4 py-2">賣方編號</th>
+          <th class="border px-4 py-2">公司名稱</th>
+          <th class="border px-4 py-2">公司地址</th>
+          <th class="border px-4 py-2">辨識率</th>
+          <th class="border px-4 py-2">預覽</th>
+        </tr>
+        <tr>
+          <input id="fStart" type="text">     <!-- 起始日期 -->
+          <input id="fEnd"   type="text">     <!-- 結束日期 -->
+          <input id="fNum"   type="text">     <!-- 發票號碼包含 -->
+          <input id="fSun"   type="text">     <!-- 統一編號包含 -->
+          <input id="fCashMin" type="number">
+          <input id="fCashMax" type="number">
+        </tr>
+      </thead>
+      <tbody id="modalResultsBody"></tbody>
+    </table>
+    <div class="mt-6 flex justify-end space-x-3">
+      <button id="reRecognizeBtn" class="bg-gray-300 hover:bg-gray-400 px-5 py-2 rounded text-base">重新辨識</button>
+      <button id="downloadBtn" class="bg-blue-500 hover:bg-blue-600 text-white px-5 py-2 rounded text-base">下載 CSV</button>
+      <button id="confirmBtn" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded text-base">確認儲存</button>
+      <button id="closeModalBtn" class="absolute top-4 right-4 text-3xl text-gray-600 hover:text-gray-900">&times;</button>
+    </div>
+  </div>
+</div>
+
+<!-- 圖片預覽 -->
+<div id="imagePreviewModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+  <div class="bg-white p-4 rounded shadow-lg relative max-w-4xl w-full">
+    <button onclick="closeImagePreview()" class="absolute top-2 right-3 text-3xl font-bold text-gray-600 hover:text-black">&times;</button>
+    <img id="previewImage" src="" alt="預覽圖片" class="mx-auto max-h-[80vh] object-contain" />
+  </div>
+</div>
+
+<!-- === Save Picker Modal (auto_inv.html) === -->
+<div id="filterPicker" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl w-[520px] p-6 shadow-xl" onclick="event.stopPropagation()">
+    <div class="text-lg font-semibold mb-4">選擇要儲存的條件</div>
+
+    <!-- 日期區間 -->
+    <div class="mb-4">
+      <div class="text-sm font-medium mb-1">日期（含起訖）</div>
+      <div class="grid grid-cols-2 gap-2">
+        <input id="fpDateStart" type="date" class="border rounded px-2 py-1">
+        <input id="fpDateEnd"   type="date" class="border rounded px-2 py-1">
+      </div>
+      <div class="text-xs text-gray-500 mt-1">可留空；系統會用每張發票上的 date 值比對。</div>
+    </div>
+
+    <!-- 文字條件 -->
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div>
+        <div class="text-sm font-medium mb-1">發票號碼（num）</div>
+        <input id="fpNum" type="text" class="w-full border rounded px-2 py-1" placeholder="例如：AB12345678（可部分比對）">
+      </div>
+      <div>
+        <div class="text-sm font-medium mb-1">統一編號（sun）</div>
+        <input id="fpSun" type="text" class="w-full border rounded px-2 py-1" placeholder="例如：83521473（可部分比對）">
+      </div>
+    </div>
+
+    <!-- 金額區間 -->
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div>
+        <div class="text-sm font-medium mb-1">金額下限（cash ≥）</div>
+        <input id="fpCashMin" type="number" step="1" class="w-full border rounded px-2 py-1" placeholder="留空不設下限">
+      </div>
+      <div>
+        <div class="text-sm font-medium mb-1">金額上限（cash ≤）</div>
+        <input id="fpCashMax" type="number" step="1" class="w-full border rounded px-2 py-1" placeholder="留空不設上限">
+      </div>
+    </div>
+    <!-- 公司名稱 -->
+    <div class="col-span-2">
+      <div class="text-sm font-medium mb-1">公司名稱（name）</div>
+      <div class="relative">
+        <input id="fpName" type="text" class="w-full border rounded px-2 py-1" placeholder="輸入公司關鍵字..." autocomplete="off" />
+        <ul id="fpNameSuggest" class="absolute left-0 right-0 bg-white border rounded shadow z-10 mt-1 hidden"></ul>
+      </div>
+    </div>
+    <!-- 動作 -->
+    <div class="flex justify-end gap-2">
+      <button id="fpCancel" class="px-4 py-2 rounded bg-gray-200" type="button">取消</button>
+      <button id="fpOk"     class="px-4 py-2 rounded bg-blue-600 text-white" type="button">確定</button>
+    </div>
+  </div>
+</div>
+<!-- === /Filter Picker Modal === -->
+
+<script>
+
+// 後端 Jinja2 傳來的 results
+window.jinjaResults = {{ results|tojson|safe }};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  // 如果是 open=results，且 jinjaResults 有資料，直接顯示彈窗
+  if (params.get('open') === 'results' && window.jinjaResults && window.jinjaResults.length > 0) {
+    recognizedResults = window.jinjaResults;
+    showRecognizeResults(recognizedResults);
+  }
+});
+  function keepAlnum(s){ return String(s||'').replace(/[^A-Za-z0-9]/g,''); }
+  function keepDigits(s){ return String(s||'').replace(/\D/g,''); }
+  function keepNumber(s){
+    let t = String(s||'').replace(/[^0-9.]/g,''); const i = t.indexOf('.');
+    if (i !== -1) t = t.slice(0,i+1) + t.slice(i+1).replace(/\./g,''); return t;
+  }
+  function sanitizeRow(row){
+      const r = { ...row };
+      if (!r.sun)   r.sun   = r.snu   || '';
+      if (!r.snu)   r.snu   = r.sun   || '';
+      if (!r.cash)  r.cash  = r.price || '';
+      if (!r.price) r.price = r.cash  || '';
+      if (!r.num)   r.num   = r.number|| '';
+      return r;
+    }
+
+  /* ===================== 狀態元素 ===================== */
+  const fileTableBody    = document.getElementById('fileTableBody');
+  const modalResultsBody = document.getElementById('modalResultsBody');
+  const resultModal      = document.getElementById('resultModal');
+
+  const btnPickFiles  = document.getElementById('btnPickFiles');
+  const btnPickFolder = document.getElementById('btnPickFolder');
+  const btnClearAll   = document.getElementById('btnClearAll');
+  const btnStart      = document.getElementById('btnStart');
+
+  const progressBar     = document.getElementById('progressBar');
+  const progressStatus  = document.getElementById('progressStatus');
+  const progressCounter = document.getElementById('progressCounter');
+  const progressPercent = document.getElementById('progressPercent');
+
+  let selectedFiles = [];
+  let recognizedResults = [];
+  try { recognizedResults = JSON.parse(localStorage.getItem('recognizedResults') || '[]'); } catch { recognizedResults = []; }
+
+  /* ===================== 進度條 / 輪詢 ===================== */
+  let pollTimer = null;
+  function setProgress(done, total, finished, error) {
+    const percent = (!total || total === 0) ? 0 : Math.floor(done * 100 / total);
+    progressBar.style.width = percent + '%';
+    progressCounter.textContent = `${done} / ${total}`;
+    progressPercent.textContent = percent + '%';
+    if (error) {
+      progressStatus.textContent = `處理完成（有錯誤）：${error}`;
+    } else if (finished) {
+      progressStatus.textContent = '處理完成 ✅';
+    } else if (total > 0) {
+      progressStatus.textContent = '辨識中…';
+    } else {
+      progressStatus.textContent = '開始辨識中…';
+    }
+  }
+  function disableActions(disabled) {
+    [btnPickFiles, btnPickFolder, btnClearAll, btnStart].forEach(b => b.disabled = !!disabled);
+    [btnPickFiles, btnPickFolder, btnClearAll, btnStart].forEach(b => {
+      b.classList.toggle('opacity-50', !!disabled);
+      b.classList.toggle('cursor-not-allowed', !!disabled);
+    });
+  }
+  function startProgressPolling(jobId) {
+    // 先歸零，等待後端第一次回報 total
+    setProgress(0, 0, false, '');
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    pollTimer = setInterval(async () => {
+      try {
+        const r = await fetch(`/progress/${jobId}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const p = await r.json();
+        setProgress(p.done || 0, p.total || 0, !!p.finished, p.error || '');
+        if (p.finished) {
+          clearInterval(pollTimer); pollTimer = null;
+          disableActions(false);
+        }
+      } catch (e) {}
+    }, 500);
+  }
+
+  /* ===================== 檔案清單（含分頁） ===================== */
+  let currentPage = 1;
+  const rowsPerPage = 10;
+
+  function renderFileTable() {
+    fileTableBody.innerHTML = '';
+    const today = new Date().toISOString().split('T')[0];
+
+    const start = (currentPage - 1) * rowsPerPage;
+    const end   = start + rowsPerPage;
+    const pageFiles = selectedFiles.slice(start, end);
+
+    let accSum = 0, accCount = 0;
+    let hasResults = recognizedResults && recognizedResults.length > 0;
+    const keys = ['num', 'date', 'sun', 'cash'];
+    pageFiles.forEach(function(file, idx) {
+      var score = '';
+      var date = '';
+      var name = file.name || file;
+      if (hasResults && recognizedResults[start + idx]) {
+        const scoreObj = recognizedResults[start + idx].score;
+        let vals = [];
+        if (scoreObj && typeof scoreObj === 'object') {
+          // 只用 YOLO conf，不混用 OCR
+          vals = keys.map(k => typeof scoreObj[k] === 'number' ? scoreObj[k] : 0);
+        }
+        let avgScore = vals.length > 0 ? vals.reduce((a,b)=>a+b,0) / vals.length : 0;
+        score = Math.round(avgScore * 100) + '%';
+        date = recognizedResults[start + idx].date || '';
+        accSum += avgScore; accCount++;
+      } else {
+        date = '';
+        score = '';
+      }
+      fileTableBody.innerHTML +=
+        '<tr>' +
+          '<td class="border px-4 py-2">' + name + '</td>' +
+          '<td class="border px-4 py-2">' + date + '</td>' +
+          '<td class="border px-4 py-2">' + (hasResults ? score : '') + '</td>' +
+          '<td class="border px-4 py-2 space-x-2">' +
+            '<label class="bg-yellow-400 hover:bg-yellow-500 text-white text-sm px-2 py-1 rounded cursor-pointer">' +
+              '修改<input type="file" accept="image/*" class="hidden" onchange="replaceFile(event,' + (start + idx) + ')" />' +
+            '</label>' +
+            '<button onclick="removeFile(' + (start + idx) + ')" class="bg-red-400 hover:bg-red-500 text-white text-sm px-2 py-1 rounded">刪除</button>' +
+          '</td>' +
+          '<td class="border px-4 py-2">' +
+            '<button onclick="previewFile(' + (start + idx) + ')" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1 rounded">預覽</button>' +
+          '</td>' +
+        '</tr>';
+    });
+    // 辨識後才顯示總辨識率（只取 num/date/sun/cash 四欄平均）
+    const overallBox = document.getElementById('overallAccBox');
+    if (hasResults && accCount > 0) {
+      const overall = Math.round(100 * accSum / accCount);
+      document.getElementById('overallAcc').textContent = `總辨識率：${overall}%`;
+      overallBox.style.display = '';
+    } else {
+      document.getElementById('overallAcc').textContent = '';
+      overallBox.style.display = 'none';
+    }
+    renderPagination();
+  }
+  function renderPagination() {
+    const pageCount = Math.ceil(selectedFiles.length / rowsPerPage);
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+    for (let i = 1; i <= pageCount; i++) {
+      pagination.innerHTML += `
+        <button onclick="changePage(${i})" class="${i === currentPage ? 'bg-blue-600 text-white' : 'bg-gray-200'} px-3 py-1 rounded">
+          ${i}
+        </button>`;
+    }
+  }
+  function changePage(p) { currentPage = p; renderFileTable(); }
+  function replaceFile(e, idx) { if (e.target.files[0]) { selectedFiles[idx] = e.target.files[0]; renderFileTable(); } }
+  function removeFile(idx) {
+    selectedFiles.splice(idx, 1);
+    const maxPage = Math.max(1, Math.ceil(selectedFiles.length / rowsPerPage));
+    if (currentPage > maxPage) currentPage = maxPage;
+    renderFileTable();
+  }
+  function handleFiles(fileList) { selectedFiles = selectedFiles.concat(Array.from(fileList)); renderFileTable(); }
+  document.getElementById('filePicker').onchange  = function () { handleFiles(this.files); };
+  document.getElementById('folderPicker').onchange = function () { handleFiles(this.files); };
+
+  function clearAllFiles() {
+    selectedFiles = [];
+    recognizedResults = [];
+    document.getElementById('filePicker').value = '';
+    document.getElementById('folderPicker').value = '';
+    currentPage = 1;
+    renderFileTable();
+    closeModal();
+    setProgress(0, 0, false, '');
+    try { localStorage.removeItem('recognizedResults'); } catch {}
+  }
+
+  /* ===================== 上傳並辨識 ===================== */
+  async function submitFiles() {
+    if (selectedFiles.length === 0) {
+      alert('請先選擇檔案');
+      return;
+    }
+
+    disableActions(true);
+
+    const formData = new FormData();
+    selectedFiles.forEach((file) => formData.append('files', file));
+
+    const jobId = crypto.randomUUID();
+    formData.append('job_id', jobId);
+    startProgressPolling(jobId);
+
+    try {
+      const response = await fetch('/upload', { method: 'POST', body: formData });
+      const payload  = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setProgress(0, selectedFiles.length || 0, true, payload.error || response.statusText);
+        disableActions(false);
+        alert('上傳失敗: ' + (payload.error || response.statusText));
+        return;
+      }
+
+      // ✅ 成功：顯示「辨識結果編輯」彈窗（不自動跳 result.html）
+      let results = payload.results || payload;
+      if (!Array.isArray(results) || results.length === 0) {
+        setProgress(selectedFiles.length || 0, selectedFiles.length || 0, true, '');
+        disableActions(false);
+        alert('沒有辨識結果');
+        return;
+      }
+
+      recognizedResults = results.map(sanitizeRow);
+      try { localStorage.setItem('recognizedResults', JSON.stringify(recognizedResults)); } catch {}
+      showRecognizeResults(recognizedResults);
+
+      setProgress(selectedFiles.length || recognizedResults.length,
+                  selectedFiles.length || recognizedResults.length,
+                  true, '');
+      disableActions(false);
+    } catch (err) {
+      setProgress(0, selectedFiles.length || 0, true, err.message || '未知錯誤');
+      disableActions(false);
+      alert('發生錯誤: ' + (err.message || err));
+    }
+  }
+
+
+  /* ===================== 顯示結果（DOM API） ===================== */
+  function showRecognizeResults(results) {
+    const tbody = document.getElementById('modalResultsBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    let accSum = 0, accCount = 0;
+    const keys = ['num', 'date', 'sun', 'cash'];
+    (results || []).forEach(function(r, idx) {
+      r = sanitizeRow(r);
+      var filename    = r.filename || (r.imageUrl ? r.imageUrl.split('/').pop() : 'image_' + (idx+1) + '.jpg');
+      var displayName = r.origin || filename;
+      // 辨識率只取四欄平均
+      let vals = [];
+      if (r.score && typeof r.score === 'object') {
+        // 只用 YOLO conf，不混用 OCR
+        vals = keys.map(k => typeof r.score[k] === 'number' ? r.score[k] : 0);
+      }
+      let avgScore = vals.length > 0 ? vals.reduce((a,b)=>a+b,0) / vals.length : 0;
+      var score = Math.round(avgScore * 100) + '%';
+      accSum += avgScore; accCount++;
+
+      var tr = document.createElement('tr');
+      // 檔名
+      var tdText = function(text) { var td=document.createElement('td'); td.className='border px-4 py-2'; td.textContent=text||''; return td; };
+      var tdInput = function(key, clean) {
+        var td = document.createElement('td');
+        td.className = 'border px-4 py-2';
+        td.setAttribute('data-key', key);
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'w-full text-center';
+        input.value = r[key] || '';
+        input.oninput = function() {
+          var v = input.value;
+          if (clean === 'alnum')  v = keepAlnum(v).slice(0, 14);
+          if (clean === 'digits') v = keepDigits(v).slice(0, 8);
+          if (clean === 'money')  v = keepNumber(v);
+          input.value = v;
+        };
+        input.onchange = function() {
+          r[key] = input.value;
+          recognizedResults[idx] = sanitizeRow(r);
+          cacheResults();
+        };
+        input.setAttribute('data-key', key);
+        td.appendChild(input);
+        return td;
+      };
+      tr.dataset.filename = filename;
+      tr.dataset.imageUrl = r.imageUrl || '';
+      tr.appendChild(tdText(displayName));
+      tr.appendChild(tdInput('num','alnum'));
+      tr.appendChild(tdInput('sun','digits'));
+      tr.appendChild(tdInput('date'));
+      tr.appendChild(tdInput('cash','money'));
+      tr.appendChild(tdInput('bnu','digits'));
+      tr.appendChild(tdInput('name'));
+      tr.appendChild(tdInput('add'));
+      // 辨識率（辨識前不顯示）
+      var tdScore = document.createElement('td');
+      tdScore.className = 'border px-4 py-2';
+      tdScore.textContent = (avgScore > 0 ? score : '');
+      tr.appendChild(tdScore);
+      // 預覽
+      var tdPreview = document.createElement('td');
+      tdPreview.className = 'border px-4 py-2';
+  var a = document.createElement('a');
+  a.href = '/result/' + filename;
+  a.className = 'bg-purple-600 hover:bg-purple-700 text-white text-sm px-2 py-1 rounded';
+  a.textContent = '詳細預覽';
+  tdPreview.appendChild(a);
+  tr.appendChild(tdPreview);
+      tbody.appendChild(tr);
+    });
+    // 顯示總辨識率
+    var overall = accCount ? Math.round(100 * accSum / accCount) : 0;
+    document.getElementById('modalOverallAcc').textContent = '總辨識率：' + overall + '%';
+    document.getElementById('modalOverallAccBox').style.display = '';
+    document.getElementById('resultModal').classList.remove('hidden');
+  }
+
+  function cacheResults() {
+    try { localStorage.setItem('recognizedResults', JSON.stringify(recognizedResults)); } catch {}
+  }
+
+  function closeModal() { resultModal.classList.add('hidden'); }
+  document.getElementById('closeModalBtn').onclick = closeModal;
+
+  // 重新辨識：有檔案就直接再送一次
+  document.getElementById('reRecognizeBtn').onclick = () => {
+    if (!selectedFiles.length) { alert('沒有可重新辨識的檔案'); return; }
+    submitFiles();
+  };
+
+  /* ===================== 下載 CSV ===================== */
+  document.getElementById('downloadBtn').onclick = () => {
+    if (!recognizedResults || !recognizedResults.length) { alert('無辨識結果可下載'); return; }
+    const rows = [['發票號碼','統一編號','日期','價格','賣方編號','公司名稱','公司地址']];
+    recognizedResults.forEach(r => {
+      r = sanitizeRow(r);
+      rows.push([r.num||'', r.sun||'', r.date||'', (r.cash||''), r.bnu||'', r.name||'', r.add||'']);
+    });
+    const csv = rows.map(r => r.join(',')).join('\n');
+    const blob = new Blob(["\uFEFF"+csv], {type: "text/csv;charset=utf-8;"});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='辨識結果.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
+  /* ===================== 確認儲存 ===================== */
+
+  /* ===================== 圖片預覽 ===================== */
+  function previewFile(idx){
+    const src = URL.createObjectURL(selectedFiles[idx]);
+    if (!src) return alert('找不到圖片或路徑錯誤');
+    const modal = document.getElementById("imagePreviewModal");
+    const img   = document.getElementById("previewImage");
+    img.src = src; modal.classList.remove("hidden");
+  }
+  function closeImagePreview() {
+    const modal = document.getElementById("imagePreviewModal");
+    const img   = document.getElementById("previewImage");
+    img.src = ""; modal.classList.add("hidden");
+  }
+
+
+  // 工具：把字串轉 YYYY-MM-DD（可吃 2025/07/09、2025-7-9…）
+  function toYMD(s){
+    if (!s) return '';
+    const d = String(s).trim().replace(/[^\d]/g,'');   // 2025/07/09 -> 20250709
+    if (d.length !== 8) return '';
+    return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6)}`;   // ← 不要換行！
+  }
+  function toInt(n){ const v = String(n||'').replace(/[^\d\-]/g,''); return v===''?null:parseInt(v,10); }
+
+  function contains(hay, needle){
+    hay = String(hay||'').toLowerCase();
+    needle = String(needle||'').toLowerCase().trim();
+    return !needle || hay.includes(needle);
+  }
+  // 取得目前畫面上的結果陣列（auto_inv.html 已有 recognizedResults）
+  function getAllRowsForSave(){
+    const rows = [];
+    document.querySelectorAll('#modalResultsBody tr').forEach(tr=>{
+      const get = k => (tr.querySelector(`input[data-key="${k}"]`)?.value || '').trim();
+      rows.push({
+        num:   get('num'),
+        sun:   get('sun'),
+        date:  get('date'),
+        cash:  get('cash'),
+        name:  get('name'),
+        add:   get('add'),
+        // 舊欄位相容
+        snu:   get('sun'),
+        price: get('cash'),
+        // 檔名/路徑（在渲染列時已塞到 dataset 了）
+        filename: tr.dataset.filename || '',
+        imageUrl: tr.dataset.imageUrl || '',
+        path:     tr.dataset.filename || ''
+      });
+    });
+    return rows;
+  }
+
+
+  // 依條件過濾
+  function filterRows(rows, cond){
+    const s = toYMD(cond.dateStart);
+    const e = toYMD(cond.dateEnd);
+    const n = (cond.num||'').trim();
+    const u = (cond.sun||'').trim();
+    const min = toInt(cond.cashMin);
+    const max = toInt(cond.cashMax);
+
+    return rows.filter(r=>{
+      // 日期
+      if (s || e){
+        const d = toYMD(r.date);
+        if (!d) return false;
+        if (s && d < s) return false;
+        if (e && d > e) return false;
+      }
+      // 發票號碼 / 統編
+      if (n && !String(r.num).includes(n)) return false;
+      if (u && !String(r.sun).includes(u)) return false;
+      // 公司名稱
+      if (cond.name && !String(r.name||'').toLowerCase().includes(cond.name.toLowerCase())) return false;
+      // 金額
+      const c = toInt(r.cash);
+      if (min!=null && (c==null || c < min)) return false;
+      if (max!=null && (c==null || c > max)) return false;
+      return true;
+    });
+  }
+
+  // 開關 modal
+  function openFilterPicker(){
+    const box = document.getElementById('filterPicker');
+    box.classList.remove('hidden');
+    box.classList.add('flex');
+  }
+  function closeFilterPicker(){
+    const box = document.getElementById('filterPicker');
+    box.classList.add('hidden');
+    box.classList.remove('flex');
+  }
+  document.getElementById('filterPicker')?.addEventListener('click', closeFilterPicker);
+  document.getElementById('fpCancel')?.addEventListener('click', closeFilterPicker);
+
+ // 「確認儲存」→ 開啟篩選彈窗
+  document.getElementById('confirmBtn')?.addEventListener('click', ()=>{
+    openFilterPicker(); // 你頁面已有這個函式
+  });
+
+  // 「套用儲存」→ 依條件過濾 → 呼叫 /confirm_result
+  document.getElementById('fpOk').addEventListener('click', async ()=>{
+    const cond = getFilterCond();
+    const all  = getAllRowsForSave();
+    const rows = filterRows(all, cond);
+    if (!rows.length) { alert('沒有符合條件的發票'); return; }
+
+    try{
+      const rsp = await fetch('/confirm_result',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ items: rows })
+      });
+      const data = await rsp.json().catch(()=>({}));
+      if (!rsp.ok) throw new Error(data.error || rsp.statusText);
+      alert(`已儲存 ${data.saved||0} 筆（略過 ${data.skipped||0}）`);
+      closeFilterPicker();
+    }catch(err){
+      alert('儲存失敗：' + (err.message||err));
+    }
+  });
+
+
+
+    // ✅ 產生帶 data-key 的欄位，讓後續能取值
+  const tdInput = (r, idx, key, clean) => {
+    const td = document.createElement('td');
+    td.className = 'border px-4 py-2';
+    td.setAttribute('data-key', key);      // ★ 新增
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'w-full text-center';
+    input.value = r[key] ?? '';
+    input.setAttribute('data-key', key);   // ★ 新增
+    input.oninput = () => {
+      let v = input.value;
+      if (clean === 'alnum')  v = v.replace(/[^A-Za-z0-9]/g,'').slice(0,14);
+      if (clean === 'digits') v = v.replace(/\D/g,'').slice(0,8);
+      if (clean === 'money')  v = v.replace(/[^\d]/g,'');
+      input.value = v;
+    };
+    input.onchange = () => {
+      r[key] = input.value;
+      recognizedResults[idx] = r;
+      cacheResults && cacheResults();
+    };
+    td.appendChild(input);
+    return td;
+  };
+
+  function addRowToTbody(tbody, r, idx) {
+    const tr = document.createElement('tr');
+    // ★ 把檔名與影像路徑塞到 dataset，後面送存用得到
+    tr.dataset.filename = r.filename || r.path || '';
+    tr.dataset.imageUrl = r.imageUrl || '';
+
+    // 依序 append 各欄位（舉例）
+    tr.appendChild(tdInput(r, idx, 'num',  'alnum'));
+    tr.appendChild(tdInput(r, idx, 'sun',  'digits'));
+    tr.appendChild(tdInput(r, idx, 'date', 'digits'));
+    tr.appendChild(tdInput(r, idx, 'cash', 'money'));
+    tr.appendChild(tdInput(r, idx, 'name', null));   // ← 公司名稱也要有 data-key
+    tr.appendChild(tdInput(r, idx, 'add',  null));
+    // …有其他欄位照樣加…
+
+    tbody.appendChild(tr);
+  }
+
+  function getFilterCond(){
+    return {
+      dateStart: document.getElementById('fpDateStart').value,
+      dateEnd:   document.getElementById('fpDateEnd').value,
+      num:       document.getElementById('fpNum').value,
+      sun:       document.getElementById('fpSun').value,
+      cashMin:   document.getElementById('fpCashMin').value,
+      cashMax:   document.getElementById('fpCashMax').value,
+      name:      document.getElementById('fpName').value,
+    };
+  }
+
+// 小工具
+const $  = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+// 一列轉物件：依你表頭順序：檔名, 發票號碼, 統一編號, 日期, 價格, 買方編號, 公司名稱, 公司地址
+function rowToItem(tr) {
+  const t = tr.children;
+  return {
+    num: (t[1]?.textContent || '').trim(),
+    sun: (t[2]?.textContent || '').trim(),
+    date: (t[3]?.textContent || '').trim(),                 // 允許 2025/07/09 或 2025-07-09
+    cash: Number((t[4]?.textContent || '0').replace(/[, ]/g,'')) || 0,
+    company_name: (t[6]?.textContent || '').trim()
+  };
+}
+
+// 依彈窗條件過濾
+function matchFilters(it) {
+  const s   = ($('#fStart')?.value || '').trim();
+  const e   = ($('#fEnd')?.value   || '').trim();
+  const num = ($('#fNum')?.value   || '').trim();
+  const sun = ($('#fSun')?.value   || '').trim();
+  const min = $('#fCashMin')?.value ? Number($('#fCashMin').value) : -Infinity;
+  const max = $('#fCashMax')?.value ? Number($('#fCashMax').value) :  Infinity;
+
+  if (s && it.date < s) return false;
+  if (e && it.date > e) return false;
+  if (num && !it.num.includes(num)) return false;
+  if (sun && !it.sun.includes(sun)) return false;
+  if (!(it.cash >= min && it.cash <= max)) return false;
+  return true;
+}
+
+// 送到後端
+async function saveItem(it) {
+  if (!it.num || !it.sun || !it.date || !it.company_name) {
+    throw new Error('有資料缺少 num / sun / date / 公司名稱');
+  }
+  const r = await fetch('/confirm_result', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(it)
+  });
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok || j.ok === false) throw new Error(j.message || (r.status+' '+r.statusText));
+  return j;
+}
+
+// 點「確定」→ 從表格抓資料 → 套篩選 → 逐筆儲存
+$('#saveConfirm')?.addEventListener('click', async () => {
+  try {
+    const rows = $$('#editTable tbody tr');
+    const list = rows.map(rowToItem).filter(matchFilters);
+    if (!list.length) return alert('沒有符合條件的資料');
+
+    let ok = 0;
+    for (const it of list) { await saveItem(it); ok++; }
+    alert(`已儲存 ${ok} 筆`);
+  } catch (e) { alert('儲存失敗：' + e.message); }
+});
+// 公司名稱自動完成（autocomplete）
+document.addEventListener('DOMContentLoaded', () => {
+  const nameInput = document.getElementById('fpName');
+  const suggestBox = document.getElementById('fpNameSuggest');
+  function getAllNames() {
+    const names = new Set();
+    (recognizedResults || []).forEach(r => {
+      if (r.name) names.add(r.name.trim());
+    });
+    return Array.from(names).filter(n => n);
+  }
+  function showSuggest(keyword) {
+    const all = getAllNames();
+    const list = all.filter(n => n.toLowerCase().includes(keyword.toLowerCase()));
+    if (!keyword || list.length === 0) { suggestBox.innerHTML = ''; suggestBox.classList.add('hidden'); return; }
+    suggestBox.innerHTML = list.map(n => `<li class="px-3 py-2 cursor-pointer hover:bg-blue-100">${n}</li>`).join('');
+    suggestBox.classList.remove('hidden');
+    suggestBox.style.position = 'absolute';
+    suggestBox.style.zIndex = '100';
+    suggestBox.querySelectorAll('li').forEach(li => {
+      li.addEventListener('mousedown', e => {
+        nameInput.value = li.textContent;
+        suggestBox.classList.add('hidden');
+      });
+    });
+  }
+  nameInput.addEventListener('input', e => {
+    showSuggest(nameInput.value);
+  });
+  nameInput.addEventListener('focus', e => {
+    showSuggest(nameInput.value);
+  });
+  nameInput.addEventListener('blur', () => {
+    setTimeout(() => suggestBox.classList.add('hidden'), 200);
+  });
+});
+</script>
+
+{% endblock %}

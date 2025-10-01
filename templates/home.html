@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}fastB2B 首頁{% endblock %}
+
+{% block content %}
+<div class="p-10 max-w-6xl mx-auto">
+  <h1 class="text-5xl font-extrabold text-blue-800 mb-8 text-center drop-shadow">歡迎來到 fastB2B 發票辨識系統</h1>
+
+  <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl shadow-lg p-8 mb-10">
+    <p class="text-2xl text-gray-900 mb-4 text-center font-semibold">
+      fastB2B 是專為企業、會計、財務人員打造的智慧型發票管理平台，結合 AI 影像辨識、雲端資料管理與自動化流程，讓發票處理變得更快速、更精準、更安全。
+    </p>
+    <ul class="list-disc pl-8 text-lg text-blue-700 mb-2">
+      <li>支援多種發票格式（JPG、PNG、PDF），自動偵測欄位、辨識文字。</li>
+      <li>整合廠商、統編、發票號碼、金額等資料，方便查詢與對帳。</li>
+      <li>辨識結果可一鍵匯出 Excel/CSV，輕鬆串接 ERP、會計系統。</li>
+      <li>多層權限管理，保障企業資料安全。</li>
+      <li>自動化流程，減少人工作業、降低錯誤率。</li>
+    </ul>
+    <div class="flex justify-center gap-6 mt-6">
+      <a href="{{ url_for('invoice_auto') }}" class="px-6 py-3 bg-blue-600 text-white rounded-lg text-xl font-bold shadow hover:bg-blue-700 transition">開始辨識發票</a>
+      <a href="{{ url_for('search') }}" class="px-6 py-3 bg-green-500 text-white rounded-lg text-xl font-bold shadow hover:bg-green-600 transition">查詢發票紀錄</a>
+    </div>
+  </div>
+
+  <!-- 功能流程圖示 -->
+  <div class="grid grid-cols-4 gap-8 mb-12">
+    <div class="bg-white p-6 rounded-xl shadow flex flex-col items-center">
+      <div class="text-4xl mb-2">📤</div>
+      <div class="text-lg font-bold mb-1 text-blue-700">上傳發票</div>
+      <div class="text-gray-700 text-center">支援多檔案拖曳、批次上傳，格式不限。</div>
+    </div>
+    <div class="bg-white p-6 rounded-xl shadow flex flex-col items-center">
+      <div class="text-4xl mb-2">🤖</div>
+      <div class="text-lg font-bold mb-1 text-blue-700">AI自動辨識</div>
+      <div class="text-gray-700 text-center">系統自動定位欄位、辨識文字，免手動輸入。</div>
+    </div>
+    <div class="bg-white p-6 rounded-xl shadow flex flex-col items-center">
+      <div class="text-4xl mb-2">🗂️</div>
+      <div class="text-lg font-bold mb-1 text-blue-700">資料管理</div>
+      <div class="text-gray-700 text-center">發票、廠商、帳務資料一站式管理，快速查詢。</div>
+    </div>
+    <div class="bg-white p-6 rounded-xl shadow flex flex-col items-center">
+      <div class="text-4xl mb-2">📈</div>
+      <div class="text-lg font-bold mb-1 text-blue-700">匯出報表</div>
+      <div class="text-gray-700 text-center">辨識結果可匯出 Excel/CSV，方便後續財務處理。</div>
+    </div>
+  </div>
+
+  <!-- 技術亮點與常見問題 -->
+  <div class="bg-white p-8 rounded-xl shadow-md mb-10">
+    <h3 class="text-2xl font-bold text-blue-700 mb-6">🔍 技術亮點與系統架構</h3>
+    <ul class="list-disc pl-6 text-lg text-gray-700 space-y-3 mb-6">
+      <li><strong>YOLOv5：</strong> 深度學習模型，精準定位發票欄位（號碼、日期、統編、金額等）。</li>
+      <li><strong>Tesseract OCR：</strong> 影像文字辨識，將欄位影像轉為可編輯文字。</li>
+      <li><strong>Flask：</strong> Python 後端架構，負責檔案上傳、AI推論、資料管理。</li>
+      <li><strong>安全設計：</strong> 權限分級、資料加密，保障企業資訊安全。</li>
+      <li><strong>高相容性：</strong> 可與多種 ERP、會計系統串接。</li>
+    </ul>
+    <h4 class="text-xl font-semibold text-blue-600 mb-2">常見問題 Q&A</h4>
+    <ul class="list-decimal pl-6 text-gray-800 space-y-2">
+      <li>Q：支援哪些發票格式？<br>A：JPG、PNG、PDF 皆可，系統自動辨識。</li>
+      <li>Q：辨識結果如何匯出？<br>A：可一鍵匯出 Excel/CSV，方便後續處理。</li>
+      <li>Q：資料安全如何保障？<br>A：採用權限分級、加密儲存，僅授權人員可存取。</li>
+      <li>Q：是否支援多用戶？<br>A：支援多帳號、分層管理，適合企業團隊使用。</li>
+    </ul>
+  </div>
+
+  <!-- 結語與目標 -->
+  <div class="bg-blue-50 p-8 rounded-xl shadow text-center">
+    <h3 class="text-2xl font-bold text-blue-700 mb-4">🌟 我們的目標</h3>
+    <p class="text-xl text-gray-900 mb-2">打造一套真正能協助企業解決發票處理痛點的智能系統，讓發票管理從手動轉為 AI 自動化，提升效率、降低成本、強化安全。</p>
+    <p class="text-lg text-blue-700">有任何問題或建議，歡迎聯絡管理員或查看新手教學！</p>
+  </div>
+</div>
+{% endblock %}
+
