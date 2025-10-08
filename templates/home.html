@@ -3,75 +3,176 @@
 {% block title %}fastB2B 首頁{% endblock %}
 
 {% block content %}
-<div class="p-10 max-w-6xl mx-auto">
-  <h1 class="text-5xl font-extrabold text-blue-800 mb-8 text-center drop-shadow">歡迎來到 fastB2B 發票辨識系統</h1>
-
-  <div class="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl shadow-lg p-8 mb-10">
-    <p class="text-2xl text-gray-900 mb-4 text-center font-semibold">
-      fastB2B 是專為企業、會計、財務人員打造的智慧型發票管理平台，結合 AI 影像辨識、雲端資料管理與自動化流程，讓發票處理變得更快速、更精準、更安全。
-    </p>
-    <ul class="list-disc pl-8 text-lg text-blue-700 mb-2">
-      <li>支援多種發票格式（JPG、PNG、PDF），自動偵測欄位、辨識文字。</li>
-      <li>整合廠商、統編、發票號碼、金額等資料，方便查詢與對帳。</li>
-      <li>辨識結果可一鍵匯出 Excel/CSV，輕鬆串接 ERP、會計系統。</li>
-      <li>多層權限管理，保障企業資料安全。</li>
-      <li>自動化流程，減少人工作業、降低錯誤率。</li>
-    </ul>
-    <div class="flex justify-center gap-6 mt-6">
-      <a href="{{ url_for('invoice_auto') }}" class="px-6 py-3 bg-blue-600 text-white rounded-lg text-xl font-bold shadow hover:bg-blue-700 transition">開始辨識發票</a>
-      <a href="{{ url_for('search') }}" class="px-6 py-3 bg-green-500 text-white rounded-lg text-xl font-bold shadow hover:bg-green-600 transition">查詢發票紀錄</a>
+<div class="p-4 md:p-10 w-full max-w-6xl mx-auto">
+  <h1 class="text-3xl md:text-5xl font-extrabold text-blue-800 mb-6 text-center flex items-center justify-center drop-shadow bg-white rounded-2xl py-6">
+     <i class="fas fa-rocket me-3"></i> 歡迎來到 fastB2B 發票辨識系統
+  </h1>
+  <!-- 主功能區塊（提醒+主按鈕合併） -->
+  <!-- 主功能區塊（提醒+主按鈕分離，提醒永遠顯示） -->
+  <div class="w-full max-w-4xl mx-auto flex flex-col items-center mb-16 text-center bg-white rounded-2xl p-4 md:p-10 shadow">
+    <div id="newInvoiceAlert" class="w-full bg-gradient-to-r from-yellow-100 to-yellow-50 border-l-8 border-yellow-500 p-5 rounded-2xl mb-4 shadow-lg flex items-center gap-4 animate__animated animate__fadeIn" style="display:none;">
+      <i class="fas fa-envelope-open-text text-yellow-600 text-3xl"></i>
+      <span class="text-yellow-900 text-xl font-bold flex-1" id="newInvoiceMsg">有合作公司寄來新發票，是否要立即下載？</span>
+      <a href="/preferences" class="px-5 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition text-lg font-semibold">前往下載</a>
+      <button id="closeInvoiceAlert" class="ml-2 px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">關閉提醒</button>
     </div>
+    <div id="openInvoiceAlertWrap" class="hidden mb-4 w-full flex justify-center">
+      <button id="openInvoiceAlert" class="px-5 py-2 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded-lg shadow hover:bg-yellow-200 transition text-lg font-semibold">開啟新發票提醒</button>
+    </div>
+    <div id="noInvoiceAlert" class="w-full bg-gray-50 border-l-8 border-gray-300 p-5 rounded-2xl mb-4 shadow flex items-center gap-4 animate__animated animate__fadeIn text-gray-500 text-lg font-semibold" style="display:none;">
+      <i class="fas fa-envelope text-gray-400 text-2xl"></i>
+      <span class="flex-1">目前沒有新 Email 發票，系統會自動偵測合作公司來信。</span>
+    </div>
+  <div class="w-full bg-gradient-to-r from-blue-100 to-blue-50 rounded-2xl shadow-xl p-6 md:p-12 flex flex-col md:flex-row gap-6 md:gap-8 justify-center items-center border border-blue-100 text-center">
+   <a href="{{ url_for('invoice_auto') }}" class="btn btn-primary btn-lg fw-bold shadow">開始辨識發票</a>
+   <a href="{{ url_for('search') }}" class="btn btn-success btn-lg fw-bold shadow">查詢發票紀錄</a>
+      </div>
+  </div>
+  <!-- 新手導覽色塊 -->
+  <div class="bg-gradient-to-r from-blue-100 to-blue-50 border-l-4 border-blue-400 p-4 rounded-xl mb-8 shadow flex items-center gap-3 animate__animated animate__fadeIn">
+    <i class="fas fa-user-graduate text-blue-500 text-2xl"></i>
+    <span class="text-blue-700 text-lg font-semibold">新手必看：<a href="/preferences" class="underline hover:text-blue-900">新手導覽與教學</a>，快速上手發票辨識流程！</span>
+  </div>
+
+  <div class="w-full max-w-3xl mx-auto bg-gradient-to-r from-blue-100 via-white to-blue-100 rounded-2xl shadow-lg p-4 md:p-10 mb-16 border border-blue-100 text-center">
+    <div class="alert alert-info d-flex align-items-center mb-4 shadow-sm" role="alert">
+      <i class="fas fa-info-circle me-2 fs-4 text-primary"></i>
+      <ul class="mb-0 ps-3 text-primary" style="font-size:1rem;">
+        <li>支援多種發票圖片（JPG、PNG、PDF），自動分類、批次辨識。</li>
+        <li>整合 Email 自動抓信，發票附件自動下載、提醒、批次管理。</li>
+        <li>辨識結果可一鍵下載 Excel/CSV，方便會計作帳。</li>
+        <li>多層權限管理，安全可靠。</li>
+        <li>手機/平板/桌機皆可用，RWD 響應式設計。</li>
+      </ul>
+    </div>
+    <!-- 主功能按鈕已置於上方主區塊，這裡不再重複顯示 -->
   </div>
 
   <!-- 功能流程圖示 -->
-  <div class="grid grid-cols-4 gap-8 mb-12">
-    <div class="bg-white p-6 rounded-xl shadow flex flex-col items-center">
-      <div class="text-4xl mb-2">📤</div>
+  <!-- 四大特色橫向排列 -->
+  <div class="w-full max-w-3xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8 mb-16 text-center bg-gradient-to-r from-blue-50 via-white to-blue-50 rounded-2xl p-4 md:p-8">
+  <div class="row justify-content-center mb-4">
+    <div class="col-md-3">
+      <div class="card text-center shadow-sm mb-3">
+        <div class="card-body">
+          <i class="fas fa-file-upload fa-2x text-primary mb-2"></i>
+          <h5 class="card-title">上傳發票</h5>
+          <p class="card-text">支援多檔案拖曳、批次上傳，格式不限。</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center shadow-sm mb-3">
+        <div class="card-body">
+          <i class="fas fa-robot fa-2x text-success mb-2"></i>
+          <h5 class="card-title">AI自動辨識</h5>
+          <p class="card-text">系統自動定位欄位、辨識文字，免手動輸入。</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center shadow-sm mb-3">
+        <div class="card-body">
+          <i class="fas fa-database fa-2x text-info mb-2"></i>
+          <h5 class="card-title">資料管理</h5>
+          <p class="card-text">發票、廠商、帳務資料一站式管理，快速查詢。</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center shadow-sm mb-3">
+        <div class="card-body">
+          <i class="fas fa-file-export fa-2x text-warning mb-2"></i>
+          <h5 class="card-title">匯出報表</h5>
+          <p class="card-text">辨識結果可匯出 Excel/CSV，方便後續財務處理。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+    </div>
+    <div class="p-7 rounded-2xl shadow-lg bg-gradient-to-r from-blue-100 to-blue-50 border border-blue-200 hover:scale-105 hover:shadow-2xl transition-all duration-200 flex flex-col items-center">
+      <i class="fas fa-file-upload text-4xl text-blue-600 mb-2"></i>
       <div class="text-lg font-bold mb-1 text-blue-700">上傳發票</div>
       <div class="text-gray-700 text-center">支援多檔案拖曳、批次上傳，格式不限。</div>
     </div>
-    <div class="bg-white p-6 rounded-xl shadow flex flex-col items-center">
-      <div class="text-4xl mb-2">🤖</div>
-      <div class="text-lg font-bold mb-1 text-blue-700">AI自動辨識</div>
+    <div class="p-7 rounded-2xl shadow-lg bg-gradient-to-r from-indigo-100 to-indigo-50 border border-indigo-200 hover:scale-105 hover:shadow-2xl transition-all duration-200 flex flex-col items-center">
+      <i class="fas fa-robot text-4xl text-indigo-600 mb-2"></i>
+      <div class="text-lg font-bold mb-1 text-indigo-700">AI自動辨識</div>
       <div class="text-gray-700 text-center">系統自動定位欄位、辨識文字，免手動輸入。</div>
     </div>
-    <div class="bg-white p-6 rounded-xl shadow flex flex-col items-center">
-      <div class="text-4xl mb-2">🗂️</div>
-      <div class="text-lg font-bold mb-1 text-blue-700">資料管理</div>
+    <div class="p-7 rounded-2xl shadow-lg bg-gradient-to-r from-green-100 to-green-50 border border-green-200 hover:scale-105 hover:shadow-2xl transition-all duration-200 flex flex-col items-center">
+      <i class="fas fa-database text-4xl text-green-600 mb-2"></i>
+      <div class="text-lg font-bold mb-1 text-green-700">資料管理</div>
       <div class="text-gray-700 text-center">發票、廠商、帳務資料一站式管理，快速查詢。</div>
     </div>
-    <div class="bg-white p-6 rounded-xl shadow flex flex-col items-center">
-      <div class="text-4xl mb-2">📈</div>
-      <div class="text-lg font-bold mb-1 text-blue-700">匯出報表</div>
+    <div class="p-7 rounded-2xl shadow-lg bg-gradient-to-r from-pink-100 to-pink-50 border border-pink-200 hover:scale-105 hover:shadow-2xl transition-all duration-200 flex flex-col items-center">
+      <i class="fas fa-file-export text-4xl text-pink-600 mb-2"></i>
+      <div class="text-lg font-bold mb-1 text-pink-700">匯出報表</div>
       <div class="text-gray-700 text-center">辨識結果可匯出 Excel/CSV，方便後續財務處理。</div>
     </div>
   </div>
 
   <!-- 技術亮點與常見問題 -->
-  <div class="bg-white p-8 rounded-xl shadow-md mb-10">
-    <h3 class="text-2xl font-bold text-blue-700 mb-6">🔍 技術亮點與系統架構</h3>
-    <ul class="list-disc pl-6 text-lg text-gray-700 space-y-3 mb-6">
-      <li><strong>YOLOv5：</strong> 深度學習模型，精準定位發票欄位（號碼、日期、統編、金額等）。</li>
-      <li><strong>Tesseract OCR：</strong> 影像文字辨識，將欄位影像轉為可編輯文字。</li>
-      <li><strong>Flask：</strong> Python 後端架構，負責檔案上傳、AI推論、資料管理。</li>
-      <li><strong>安全設計：</strong> 權限分級、資料加密，保障企業資訊安全。</li>
-      <li><strong>高相容性：</strong> 可與多種 ERP、會計系統串接。</li>
-    </ul>
-    <h4 class="text-xl font-semibold text-blue-600 mb-2">常見問題 Q&A</h4>
-    <ul class="list-decimal pl-6 text-gray-800 space-y-2">
-      <li>Q：支援哪些發票格式？<br>A：JPG、PNG、PDF 皆可，系統自動辨識。</li>
-      <li>Q：辨識結果如何匯出？<br>A：可一鍵匯出 Excel/CSV，方便後續處理。</li>
-      <li>Q：資料安全如何保障？<br>A：採用權限分級、加密儲存，僅授權人員可存取。</li>
-      <li>Q：是否支援多用戶？<br>A：支援多帳號、分層管理，適合企業團隊使用。</li>
-    </ul>
-  </div>
+  <div class="bg-gradient-to-r from-blue-100 via-white to-blue-100 p-4 md:p-10 rounded-2xl shadow-lg mb-10 text-center w-full max-w-3xl mx-auto">
+  <!-- 技術亮點與 Q&A 可依需求補回 -->
 
   <!-- 結語與目標 -->
-  <div class="bg-blue-50 p-8 rounded-xl shadow text-center">
-    <h3 class="text-2xl font-bold text-blue-700 mb-4">🌟 我們的目標</h3>
+  <div class="bg-white p-4 md:p-10 rounded-2xl shadow-lg text-center w-full max-w-4xl mx-auto">
+    <h3 class="text-2xl font-bold text-blue-700 mb-4 flex items-center justify-center">
+      <i class="fas fa-star mr-2 text-yellow-400"></i> 我們的目標
+    </h3>
     <p class="text-xl text-gray-900 mb-2">打造一套真正能協助企業解決發票處理痛點的智能系統，讓發票管理從手動轉為 AI 自動化，提升效率、降低成本、強化安全。</p>
-    <p class="text-lg text-blue-700">有任何問題或建議，歡迎聯絡管理員或查看新手教學！</p>
+    <p class="text-lg text-blue-700">有任何問題或建議，歡迎聯絡管理員或查看 <a href="/preferences" class="underline hover:text-blue-900">新手教學</a>！</p>
   </div>
 </div>
+<script>
+// 自動查詢新發票 API，顯示提醒
+function isInvoiceAlertClosed() {
+  return localStorage.getItem('hideInvoiceAlert') === '1';
+}
+function setInvoiceAlertClosed(val) {
+  if (val) {
+    localStorage.setItem('hideInvoiceAlert', '1');
+  } else {
+    localStorage.removeItem('hideInvoiceAlert');
+  }
+}
+function updateInvoiceAlertUI(show, msg) {
+  const isClosed = isInvoiceAlertClosed();
+  const alertBox = document.getElementById('newInvoiceAlert');
+  const noAlert = document.getElementById('noInvoiceAlert');
+  document.getElementById('openInvoiceAlertWrap').classList.toggle('hidden', !isClosed);
+  if (show && !isClosed) {
+    alertBox.style.display = '';
+    noAlert.style.display = 'none';
+    document.getElementById('newInvoiceMsg').textContent = msg;
+  } else {
+    alertBox.style.display = 'none';
+    noAlert.style.display = '';
+  }
+}
+async function checkNewInvoices() {
+  try {
+    const rsp = await fetch('/api/new_invoices');
+    const data = await rsp.json();
+    if (data.count > 0 && !isInvoiceAlertClosed()) {
+      updateInvoiceAlertUI(true, `有合作公司寄來 ${data.count} 張新發票，是否要立即下載？`);
+    } else {
+      updateInvoiceAlertUI(false);
+    }
+  } catch (e) { updateInvoiceAlertUI(false); }
+}
+document.getElementById('closeInvoiceAlert').onclick = function() {
+  setInvoiceAlertClosed(true);
+  updateInvoiceAlertUI(false);
+};
+document.getElementById('openInvoiceAlert').onclick = function() {
+  setInvoiceAlertClosed(false);
+  checkNewInvoices();
+  updateInvoiceAlertUI(false);
+};
+checkNewInvoices();
+setInterval(checkNewInvoices, 60000); // 每分鐘自動查詢
+</script>
 {% endblock %}
 

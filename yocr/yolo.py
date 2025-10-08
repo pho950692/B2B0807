@@ -13,18 +13,13 @@ from typing import Any, Dict, Optional, List, Tuple
 import os
 import uuid
 from yocr.ocr_utils import ocr_fields_from_crops
-
+import cv2
 
 # 依賴
 try:
     import torch
 except Exception:
     torch = None
-
-try:
-    import cv2
-except Exception:
-    cv2 = None
 
 
 # ---------- 模型路徑 ----------
@@ -55,18 +50,19 @@ DEFAULT_KEY_ORDER = ["num", "date", "sun", "cash"]
 # 啟動時印出路徑確認
 print("[YOLO MODEL PATHS]", MODEL_PATHS)
 
-
-
-
 # ---------- 小工具 ----------
 def _load_bgr(img_or_path: Any):
     if cv2 is None:
         return None
+    # 僅允許圖片路徑或 cv2.imread 讀進來的 numpy array
     if isinstance(img_or_path, (str, bytes)):
+        # 直接用 cv2.imread 讀圖，不經過 PIL
         return cv2.imread(img_or_path)
     if getattr(img_or_path, "shape", None) is not None:
+        # 已經是 numpy array
         return img_or_path
-    return None
+    # 其他型態一律不接受
+    raise ValueError("img_or_path 必須是圖片路徑或 cv2.imread 讀進來的 numpy array")
 
 
 def _ensure_dir(d: str):
@@ -157,23 +153,20 @@ def _crop(img_bgr, box: Tuple[int, int, int, int], out_path: str) -> bool:
 # ---------- 主流程 ----------
 def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: str = "auto", **kwargs) -> Dict[str, Any]:
     """
-    :param img_or_path: 影像路徑或 numpy array(BGR)
+    :param img_or_path: 僅允許圖片路徑（str）或 cv2.imread 讀進來的 numpy array (BGR)
     :param crops_dir:   裁切輸出資料夾
     :param inv_type:    'auto' / 'pc' / 'op' / 'mi'
     :return: { type, num, date, sun, cash, crops: [{key,path,web_path}, ...] }
     """
-    # 與 batch 端一致，mi 類型直接用 PIL 讀圖
-    if inv_type == "mi":
-        from PIL import Image
-        if isinstance(img_or_path, (str, bytes)):
-            pil_img = Image.open(img_or_path).convert("RGB")
-        else:
-            # 若已是 numpy array，轉 PIL
-            import numpy as np
-            pil_img = Image.fromarray(img_or_path.astype(np.uint8))
-        img_bgr = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-    else:
-        img_bgr = _load_bgr(img_or_path)
+    # 圖片來源與 batch 工具完全一致
+
+    # 只允許圖片路徑（str），直接丟給 YOLO，與 batch 工具一致
+    if not isinstance(img_or_path, (str, bytes)):
+        raise ValueError("img_or_path 必須是圖片路徑（str）")
+    img_bgr = cv2.imread(img_or_path)
+    # 存下送進 YOLO 的圖片內容（debug 用）
+    debug_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"debug_web_{os.path.basename(str(img_or_path))}")
+    cv2.imwrite(debug_path, img_bgr)
     need_fallback = False
     missing = []
     fields = {}
@@ -196,7 +189,7 @@ def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: 
     with torch.no_grad():
         tr3.conf = float(os.environ.get("YOLO_CONF", 0.10))
         tr3.iou  = float(os.environ.get("YOLO_IOU", 0.45))
-    res_tr3 = tr3(img_bgr, size=640)
+    res_tr3 = tr3(img_or_path, size=640)
     det_tr3 = res_tr3.xyxy[0]
     inv = _choose_invoice_type(det_tr3, class_map) if inv_type == "auto" else inv_type.lower()
     if inv not in ("pc", "op", "mi"):
@@ -205,9 +198,9 @@ def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: 
     # 2) 用對應模型偵測欄位（直接用 YOLO class name，不做 mapping function）
     model_inv = _load_yolo_model(MODEL_PATHS[inv])
     with torch.no_grad():
-        model_inv.conf = float(os.environ.get("YOLO_CONF", 0.15))  # 降低 conf 門檻
+        model_inv.conf = float(os.environ.get("YOLO_CONF", 0.3))  # 與 batch 一致
         model_inv.iou = float(os.environ.get("YOLO_IOU", 0.45))
-        res_fields = model_inv(img_bgr, size=640)
+        res_fields = model_inv(img_or_path, size=640)
     det = res_fields.xyxy[0]
     names = model_inv.names  # YOLO class name dict/list
     # 自動建立 class index 對應表
@@ -236,8 +229,8 @@ def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: 
                 class_map[int(i)] = "cash"
     print("[YOLO class_map]", class_map)
 
-    # === YOLO偵測框 debug print ===
-    print("[YOLO class names]", names)
+    # === YOLO偵測框 debug  ===
+    ("[YOLO class names]", names)
     print("[YOLO偵測框]", [(class_map.get(int(c[-1]), str(names[int(c[-1])])) , c[4]) for c in det.tolist()])
 
     # === 統計 cash 類別 conf 分布（分 inv 類型） ===
@@ -288,7 +281,16 @@ def detect_and_ocr(img_or_path: Any, crops_dir: Optional[str] = None, inv_type: 
             crops.append({"key": cls_name, "path": out_file, "conf": float(conf)})
 
     # 4) OCR辨識裁切圖文字
-    fields = ocr_fields_from_crops({c["key"]: os.path.join(crops_dir, c["path"]) for c in crops}, inv)
+    crop_dict = {c["key"]: os.path.join(crops_dir, c["path"]) for c in crops}
+    fields = ocr_fields_from_crops(crop_dict, inv)
+    # 若有欄位 YOLO 沒偵測出來，直接用全頁OCR補抓
+    from yocr.ocr_utils import fullpage_anchor_ocr
+    for k in ("num", "date", "sun", "cash"):
+        if k not in crop_dict or not fields.get(k):
+            # 用全頁OCR補抓該欄位
+            fullpage = fullpage_anchor_ocr(img_bgr, inv)
+            if fullpage.get(k):
+                fields[k] = fullpage[k]
 
     # 5) 裝上前端可用網址
     web_base = "/uploads/cropped"
@@ -318,8 +320,7 @@ def visualize_yolo_results(model, img_path: str, save_path: str = "debug.jpg"):
     import cv2
     results = model(img_path)  # YOLO 預測
     
-    # ✅ Debug 輸出 YOLO 偵測框
-    print("\n[YOLO DEBUG]")
+
     for *xyxy, conf, cls in results.xyxy[0]:
         x1, y1, x2, y2 = map(int, xyxy)
         print(f"  Class={int(cls)} Conf={conf:.2f} BBox=({x1},{y1},{x2},{y2})")
@@ -339,13 +340,31 @@ def save_yolo_box_image(model, img_path: str, save_path: str = None):
     import cv2, os
     results = model(img_path)
     img = cv2.imread(img_path)
-    for *xyxy, conf, cls in results.xyxy[0]:
-        x1, y1, x2, y2 = map(int, xyxy)
-        # 改用藍色框 (BGR: (255, 0, 0))
-        cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
-        cv2.putText(img, f"{int(cls)} {conf:.2f}", (x1, y1-5),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
-    # 預設存到 /uploads/cropped/box_{原檔名}.jpg
+    import inspect
+    frame = inspect.currentframe().f_back
+    det = frame.f_locals.get('det', None)
+    class_map = frame.f_locals.get('class_map', None)
+    wanted = frame.f_locals.get('wanted', {"num", "date", "sun", "cash"})
+    if det is not None and class_map is not None:
+        det_rows = det.tolist()
+        for cls_name in wanted:
+            boxes = [row for row in det_rows if class_map.get(int(row[5]),"") == cls_name]
+            if not boxes:
+                continue
+            best = max(boxes, key=lambda r: r[4])
+            x1, y1, x2, y2, conf, cls = best
+            x1 = int(x1); y1 = int(y1); x2 = int(x2); y2 = int(y2)
+            # 藍色框 (BGR: (255, 0, 0))
+            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+            cv2.putText(img, f"{cls_name} {conf:.2f}", (x1, y1-5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+    else:
+        # fallback 舊行為
+        for *xyxy, conf, cls in results.xyxy[0]:
+            x1, y1, x2, y2 = map(int, xyxy)
+            cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 0), 2)
+            cv2.putText(img, f"{int(cls)} {conf:.2f}", (x1, y1-5),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
     if not save_path:
         base = os.path.basename(img_path)
         here = os.path.dirname(os.path.abspath(__file__))

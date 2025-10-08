@@ -43,7 +43,7 @@
         {"title": "發票管理", "items": [("search", "發票紀錄查詢")]},
         {"title": "辨識發票", "items": [("manual_invoice", "手動新增發票"), ("invoice_auto", "自動辨識發票")]},
         {"title": "帳務管理", "items": [("inv_re", "統計報表")]},
-        {"title": "其他", "items": [("home", "首頁"), ("preferences", "設定"), ("account_edit", "帳號資料修改")]}
+        {"title": "其他", "items": [("home", "首頁"), ("preferences", "Email發票檔案管理"), ("account_edit", "帳號資料修改")]}
       ] %}
 
       {% if session.get('role') == 'admin' %}
@@ -80,12 +80,49 @@
     <div class="bg-white rounded-xl shadow-xl p-8 w-full max-w-xl relative">
       <button onclick="document.getElementById('guideTourModal').classList.add('hidden')" class="absolute top-4 right-6 text-2xl text-gray-500 hover:text-black">&times;</button>
       <h2 class="text-2xl font-bold mb-4 text-blue-700">新手教學</h2>
-      <ul class="list-disc pl-6 space-y-2 text-lg">
-        <li>快速查詢發票、管理公司資料。</li>
-        <li>可手動或自動辨識發票，支援 JPG/PNG/PDF。</li>
-        <li>發票辨識完成後可下載 Excel 或預覽圖片。</li>
-        <li>帳號、設定、統計報表都在上方選單。</li>
-        <li>如遇問題可聯絡管理員或查看說明文件。</li>
+      <ul class="list-none pl-0 space-y-4 text-lg">
+        <li class="flex items-start gap-3">
+          <span class="text-blue-500 text-2xl"><i class="fas fa-upload"></i></span>
+          <span>
+            <b>1. 上傳發票</b><br>
+            點選「自動辨識發票」→ 選擇檔案或資料夾 → 按「開始辨識」。支援 JPG/PNG/PDF 多檔拖曳。
+          </span>
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="text-green-500 text-2xl"><i class="fas fa-robot"></i></span>
+          <span>
+            <b>2. AI辨識與編輯</b><br>
+            系統自動辨識發票欄位，結果可人工修正，確認無誤後按「確認儲存」。
+          </span>
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="text-purple-500 text-2xl"><i class="fas fa-file-download"></i></span>
+          <span>
+            <b>3. 匯出報表</b><br>
+            點「下載 Excel/CSV」即可匯出發票資料，方便後續財務處理。
+          </span>
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="text-indigo-500 text-2xl"><i class="fas fa-search"></i></span>
+          <span>
+            <b>4. 查詢發票</b><br>
+            點「發票紀錄查詢」→ 輸入條件查詢，快速找到所需發票。
+          </span>
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="text-pink-500 text-2xl"><i class="fas fa-building"></i></span>
+          <span>
+            <b>5. 公司管理</b><br>
+            點「廠商管理」→ 新增/編輯公司資料，維護合作廠商資訊。
+          </span>
+        </li>
+        <li class="flex items-start gap-3">
+          <span class="text-gray-500 text-2xl"><i class="fas fa-question-circle"></i></span>
+          <span>
+            <b>常見問題</b><br>
+            帳號、設定、統計報表都在上方選單。如遇問題可聯絡管理員或查看說明文件。
+          </span>
+        </li>
       </ul>
     </div>
   </div>

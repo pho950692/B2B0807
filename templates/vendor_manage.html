@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}公司資料維護 - fastB2B{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto py-10 px-4">
+  <h2 class="text-4xl font-extrabold text-blue-700 mb-8 flex items-center drop-shadow">
+    <i class="fas fa-building mr-3 text-4xl"></i> 公司資料維護
+  </h2>
+  <!-- 操作說明色塊 -->
+  <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-xl mb-8 shadow flex items-start gap-3 animate__animated animate__fadeIn">
+    <i class="fas fa-info-circle text-blue-500 text-2xl mt-1"></i>
+    <ul class="list-disc pl-4 text-blue-700 text-base space-y-1">
+      <li>可新增、編輯、刪除公司資料，請依實際合作廠商維護。</li>
+      <li>自家公司需由管理員指定，若尚未設定可先新增於「配合公司」，再由管理員設為自家公司。</li>
+      <li>統一編號請填 8 碼數字，地址、聯絡人請填正確格式。</li>
+      <li>如需匯出公司資料，請聯絡管理員或於報表頁操作。</li>
+    </ul>
+  </div>
+
+  <!-- 自家公司 -->
+  <div class="mb-12">
+    <h3 class="text-2xl font-semibold text-gray-800 mb-4 flex items-center">
+      <i class="fas fa-user-tie mr-2 text-blue-500"></i> 我方公司
+    </h3>
+    <div class="overflow-x-auto bg-white shadow-lg rounded-xl">
+      <table class="min-w-full text-center border border-gray-300 rounded-xl overflow-hidden">
+        <thead class="bg-blue-100">
+          <tr>
+            <th class="border px-4 py-3 font-semibold text-blue-700">公司名稱</th>
+            <th class="border px-4 py-3 font-semibold text-blue-700">統一編號</th>
+            <th class="border px-4 py-3 font-semibold text-blue-700">地址</th>
+            <th class="border px-4 py-3 font-semibold text-blue-700">聯絡人</th>
+            <th class="border px-4 py-3 font-semibold text-blue-700">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if self_company %}
+            <tr class="hover:bg-blue-50 transition">
+              <td class="border px-4 py-2">{{ self_company.name }}</td>
+              <td class="border px-4 py-2">{{ self_company.tax_id or '—' }}</td>
+              <td class="border px-4 py-2">{{ self_company.address or '—' }}</td>
+              <td class="border px-4 py-2">{{ self_company.contact or '—' }}</td>
+              <td class="border px-4 py-3">
+                <a href="{{ url_for('vendor_edit', vendor_id=self_company.id) }}"
+                   class="bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-white px-5 py-2 rounded-xl font-semibold shadow inline-flex items-center transition">
+                  <i class="fas fa-edit mr-2"></i> 編輯
+                </a>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="5" class="py-6 text-gray-500">
+                尚未設定自家公司。你可以到「配合公司」新增後，由管理員在「廠商總覽」設定自家公司。
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 配合公司 -->
+  <div>
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="text-2xl font-semibold text-gray-800 flex items-center">
+        <i class="fas fa-handshake mr-2 text-green-500"></i> 配合公司
+      </h3>
+      <a href="{{ url_for('add_vendor') }}"
+         class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl font-semibold shadow inline-flex items-center transition">
+        <i class="fas fa-plus mr-2"></i> 新增公司資料
+      </a>
+    </div>
+
+    <div class="overflow-x-auto bg-white shadow-lg rounded-xl">
+      <table class="min-w-full text-center border border-gray-300 rounded-xl overflow-hidden">
+        <thead class="bg-blue-100">
+          <tr>
+            <th class="border px-4 py-3 font-semibold text-blue-700">公司名稱</th>
+            <th class="border px-4 py-3 font-semibold text-blue-700">統一編號</th>
+            <th class="border px-4 py-3 font-semibold text-blue-700">地址</th>
+            <th class="border px-4 py-3 font-semibold text-blue-700">聯絡人</th>
+            <th class="border px-4 py-3 font-semibold text-blue-700">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if partners %}
+            {% for vendor in partners %}
+            <tr class="hover:bg-blue-50 transition">
+              <td class="border px-4 py-2">{{ vendor.name }}</td>
+              <td class="border px-4 py-2">{{ vendor.tax_id or '—' }}</td>
+              <td class="border px-4 py-2">{{ vendor.address or '—' }}</td>
+              <td class="border px-4 py-2">{{ vendor.contact or '—' }}</td>
+              <td class="border px-4 py-3">
+                <div class="flex items-center justify-center gap-3 flex-wrap">
+                  <a href="{{ url_for('vendor_edit', vendor_id=vendor.id) }}"
+                     class="bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-white px-5 py-2 rounded-xl font-semibold shadow inline-flex items-center transition">
+                    <i class="fas fa-edit mr-2"></i> 編輯
+                  </a>
+
+                  <form method="POST"
+                        action="{{ url_for('vendor_delete', vendor_id=vendor.id) }}"
+                        onsubmit="return confirm('確定要刪除這家公司嗎？此動作無法復原');">
+                    <button class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-2 rounded-xl font-semibold shadow inline-flex items-center transition">
+                      <i class="fas fa-trash-alt mr-2"></i> 刪除
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="5" class="py-6 text-gray-500">目前尚無配合公司，請點右上角「新增公司資料」。</td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

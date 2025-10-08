@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}發票查詢記錄 - fastB2B{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-10 px-4">
+  <h2 class="text-3xl font-extrabold text-blue-700 mb-6 flex items-center drop-shadow">
+    <i class="fas fa-search mr-3 text-2xl"></i> 發票記錄查詢
+  </h2>
+  <!-- 查詢說明色塊 -->
+  <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-xl mb-8 shadow flex items-start gap-3 animate__animated animate__fadeIn">
+    <i class="fas fa-info-circle text-blue-500 text-2xl mt-1"></i>
+    <ul class="list-disc pl-4 text-blue-700 text-base space-y-1">
+      <li>可依公司名稱、統一編號、日期區間查詢發票紀錄。</li>
+      <li>僅能修改七天內的資料，超過無法編輯。</li>
+      <li>如需匯出 Excel，請聯絡管理員或於報表頁操作。</li>
+      <li>查無資料時會顯示友善提示。</li>
+    </ul>
+  </div>
+
+  <form method="GET" class="bg-white rounded-xl shadow-lg p-6 mb-8 grid grid-cols-1 md:grid-cols-3 gap-6 text-lg">
+    <div>
+      <label class="block font-semibold text-blue-700 mb-2">公司名稱</label>
+      <input type="text" name="company_name" value="{{ company_name or '' }}" class="w-full border border-gray-300 rounded-lg px-4 py-3">
+    </div>
+    <div>
+      <label class="block font-semibold text-blue-700 mb-2">統一編號</label>
+      <input type="text" name="tax_id" value="{{ tax_id or '' }}" class="w-full border border-gray-300 rounded-lg px-4 py-3">
+    </div>
+    <div>
+      <label class="block font-semibold text-blue-700 mb-2">日期區間</label>
+      <div class="flex gap-2">
+        <input type="date" name="start_date" value="{{ start_date or '' }}" class="border border-gray-300 rounded-lg px-3 py-2 flex-1">
+        <span class="mx-1 mt-2">~</span>
+        <input type="date" name="end_date" value="{{ end_date or '' }}" class="border border-gray-300 rounded-lg px-3 py-2 flex-1">
+      </div>
+    </div>
+    <div class="md:col-span-3 flex justify-end mt-4">
+      <button type="submit" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-7 py-3 rounded-xl font-semibold shadow inline-flex items-center text-base transition">
+        <i class="fas fa-search mr-2"></i> 查詢
+      </button>
+    </div>
+  </form>
+
+  {% if results %}
+  <table class="w-full border border-gray-300 text-center text-base rounded-xl shadow-lg overflow-hidden mb-8">
+    <thead class="bg-blue-100">
+      <tr>
+        <th class="border px-4 py-3 font-semibold text-blue-700">廠商名稱</th>
+        <th class="border px-4 py-3 font-semibold text-blue-700">廠商編號</th>
+        <th class="border px-4 py-3 font-semibold text-blue-700">發票號碼</th>
+        <th class="border px-4 py-3 font-semibold text-blue-700">金額</th>
+        <th class="border px-4 py-3 font-semibold text-blue-700">發票日期</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in results %}
+      <tr class="hover:bg-blue-50 transition">
+        <td class="border px-4 py-3">{{ row.company_name }}</td>
+        <td class="border px-4 py-3">{{ row.company_id }}</td>
+        <td class="border px-4 py-3">{{ row.invoice_number }}</td>
+        <td class="border px-4 py-3">{{ "{:,}".format(row.amount) }}</td>
+        <td class="border px-4 py-3">{{ row.date }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    {% if request.args %}
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-xl shadow flex items-center gap-3 mb-6">
+      <i class="fas fa-exclamation-circle text-yellow-500 text-2xl"></i>
+      <span class="text-yellow-700 text-base font-semibold">查無相關發票資料，請確認查詢條件或聯絡管理員。</span>
+    </div>
+    {% endif %}
+  {% endif %}
+
+  <div class="flex justify-end gap-4 mt-8">
+    <button type="button" onclick="location.href='{{ url_for('search') }}'" class="bg-gradient-to-r from-gray-300 to-gray-400 hover:from-gray-400 hover:to-gray-500 px-6 py-3 rounded-xl font-semibold shadow inline-flex items-center text-base transition">
+      <i class="fas fa-arrow-left mr-2"></i> 返回首頁
+    </button>
+  </div>
+</div>
+{% endblock %}

@@ -62,6 +62,7 @@
     <a href="/camera" class="bg-green-600 hover:bg-green-700 text-white text-lg px-6 py-3 rounded-lg font-bold shadow inline-flex items-center">
       <i class="fas fa-camera mr-2"></i> 開啟鏡頭
     </a>
+    <!-- Email 載入按鈕已移除 -->
   </div>
 
   <!-- 空狀態插圖 -->
@@ -77,33 +78,35 @@
         總辨識率：--
       </span>
     </div>
-    <table class="w-full border border-gray-300 text-center text-base" id="fileTable">
-      <thead class="bg-gray-100">
+    <table class="w-full border border-gray-300 text-center text-base rounded-xl shadow-lg overflow-hidden" id="fileTable">
+      <thead class="bg-blue-100">
         <tr>
-          <th class="border px-4 py-2">檔案名稱</th>
-          <th class="border px-4 py-2">日期</th>
-          <th class="border px-4 py-2">辨識率</th>
-          <th class="border px-4 py-2">操作</th>
-          <th class="border px-4 py-2">預覽</th>
+          <th class="border px-4 py-3 font-semibold text-blue-700">檔案名稱</th>
+          <th class="border px-4 py-3 font-semibold text-blue-700">日期</th>
+          <th class="border px-4 py-3 font-semibold text-blue-700">辨識率 <i class="fas fa-info-circle text-blue-400 ml-1" title="辨識率=AI信心×格式檢查"></i></th>
+          <th class="border px-4 py-3 font-semibold text-blue-700">操作</th>
+          <th class="border px-4 py-3 font-semibold text-blue-700">預覽</th>
         </tr>
       </thead>
       <tbody id="fileTableBody">
         {% for row in results %}
-        <tr>
-          <td class="border px-4 py-2">{{ row.origin }}</td>
-          <td class="border px-4 py-2">{{ row.date }}</td>
-          <td class="border px-4 py-2">
+        <tr class="hover:bg-blue-50 transition">
+          <td class="border px-4 py-3">{{ row.origin }}</td>
+          <td class="border px-4 py-3">{{ row.date }}</td>
+          <td class="border px-4 py-3">
             {% if row.score %}
-              {{ (row.score.values()|sum / (row.score.values()|length) * 100) | round(0) }}%
+              <span class="inline-block bg-emerald-100 text-emerald-700 font-bold px-3 py-1 rounded-full shadow">{{ (row.score.values()|sum / (row.score.values()|length) * 100) | round(0) }}%</span>
             {% else %}
-              0%
+              <span class="inline-block bg-gray-100 text-gray-400 px-3 py-1 rounded-full">0%</span>
             {% endif %}
           </td>
-          <td class="border px-4 py-2">
-            <a href="{{ url_for('yr_result', filename=row.filename) }}" class="text-blue-600 underline">詳細</a>
+          <td class="border px-4 py-3 space-x-2">
+            <a href="{{ url_for('yr_result', filename=row.filename) }}" class="bg-blue-500 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow inline-flex items-center font-semibold transition">
+              <i class="fas fa-eye mr-2"></i> 詳細
+            </a>
           </td>
-          <td class="border px-4 py-2">
-            <img src="{{ row.imageUrl }}" alt="預覽" class="h-12 rounded border" />
+          <td class="border px-4 py-3">
+            <img src="{{ row.imageUrl }}" alt="預覽" class="h-12 rounded border shadow" />
           </td>
         </tr>
         {% endfor %}
@@ -112,9 +115,15 @@
   </div>
 
   <div class="mt-6 flex justify-end gap-4">
-    <a href="/" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded text-base">回首頁</a>
-    <button id="btnClearAll" onclick="clearAllFiles()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded text-base">全部清除</button>
-    <button id="btnStart" onclick="submitFiles()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded text-base font-semibold">開始辨識</button>
+    <a href="/" class="bg-gradient-to-r from-gray-300 to-gray-400 hover:from-gray-400 hover:to-gray-500 px-5 py-3 rounded-xl text-base font-semibold shadow inline-flex items-center transition">
+      <i class="fas fa-home mr-2"></i> 回首頁
+    </a>
+    <button id="btnClearAll" onclick="clearAllFiles()" class="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white px-5 py-3 rounded-xl text-base font-semibold shadow inline-flex items-center transition">
+      <i class="fas fa-trash-alt mr-2"></i> 全部清除
+    </button>
+    <button id="btnStart" onclick="submitFiles()" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-7 py-3 rounded-xl text-base font-semibold shadow inline-flex items-center transition">
+      <i class="fas fa-robot mr-2"></i> 開始辨識
+    </button>
   </div>
 
   <!-- 進度條區塊 -->
@@ -231,14 +240,71 @@
     </div>
     <!-- 動作 -->
     <div class="flex justify-end gap-2">
-      <button id="fpCancel" class="px-4 py-2 rounded bg-gray-200" type="button">取消</button>
-      <button id="fpOk"     class="px-4 py-2 rounded bg-blue-600 text-white" type="button">確定</button>
+  <button id="fpCancel" class="px-4 py-2 rounded bg-gray-200" type="button">取消</button>
+  <button id="fpOk"     class="px-4 py-2 rounded bg-blue-600 text-white" type="button">確定</button>
+  <button id="fpSaveAll" class="px-4 py-2 rounded bg-green-600 text-white" type="button">全部儲存</button>
     </div>
   </div>
 </div>
 <!-- === /Filter Picker Modal === -->
 
 <script>
+// ===== Email 發票圖片載入功能 =====
+const btnLoadEmailImages = document.getElementById('btnLoadEmailImages');
+const emailImageSelect = document.getElementById('emailImageSelect');
+let emailImageList = [];
+
+async function fetchEmailImages() {
+  try {
+    const r = await fetch('/api/new_invoices');
+    const data = await r.json();
+    emailImageList = data.files || [];
+    // 填入下拉選單
+    emailImageSelect.innerHTML = '';
+    if (emailImageList.length === 0) {
+      emailImageSelect.innerHTML = '<option value="">（無可用 Email 發票圖片）</option>';
+    } else {
+      emailImageSelect.innerHTML = '<option value="">請選擇 Email 發票圖片...</option>' +
+        emailImageList.map(f => `<option value="${f}">${f}</option>`).join('');
+    }
+  } catch (e) {
+    emailImageSelect.innerHTML = '<option value="">（載入失敗，請稍後重試）</option>';
+  }
+}
+
+btnLoadEmailImages.addEventListener('click', async () => {
+  btnLoadEmailImages.disabled = true;
+  btnLoadEmailImages.textContent = '載入中...';
+  await fetchEmailImages();
+  emailImageSelect.classList.remove('hidden');
+  btnLoadEmailImages.textContent = '載入 Email 發票圖片';
+  btnLoadEmailImages.disabled = false;
+});
+
+emailImageSelect.addEventListener('change', async (e) => {
+  const fname = e.target.value;
+  if (!fname) return;
+  // 檢查是否已經加入
+  if (selectedFiles.some(f => f.origin === fname)) {
+    alert('此圖片已在清單中');
+    return;
+  }
+  // 加入 selectedFiles，並觸發 renderFileTable
+  selectedFiles.push({
+    origin: fname,
+    filename: fname,
+    imageUrl: `/uploads/${fname}`,
+    date: '',
+    score: null,
+    fromEmail: true
+  });
+  renderFileTable();
+  emailImageSelect.value = '';
+});
+// 只在非 open=results 狀態下清空辨識資料
+if (!location.search.includes('open=results')) {
+  localStorage.removeItem('recognizedResults');
+}
 
 // 後端 Jinja2 傳來的 results
 window.jinjaResults = {{ results|tojson|safe }};
@@ -349,10 +415,35 @@ document.addEventListener('DOMContentLoaded', () => {
       var name = file.name || file;
       if (hasResults && recognizedResults[start + idx]) {
         const scoreObj = recognizedResults[start + idx].score;
+        const ocrObj = recognizedResults[start + idx];
         let vals = [];
+        let formatChecks = [];
+        // 格式檢查函式
+        function checkFormat(type, val) {
+          if (!val) return false;
+          if (type === 'num') {
+            // PChome: 2字母+8數字, Microsoft: 1字母+9數字, OpenAI: 8碼+"-"+4碼
+            return /^[A-Z]{2}\d{8}$/.test(val) || /^[A-Z]{1}\d{9}$/.test(val) || /^[A-Z0-9]{8}-\d{4}$/.test(val);
+          }
+          if (type === 'sun') {
+            return /^\d{8}$/.test(val);
+          }
+          if (type === 'cash') {
+            return /^\d{1,3}(,\d{3})*$/.test(val) || /^\d+$/.test(val) || /^TWD \d+$/.test(val) || /^\$\d+(\.\d{2})? USD$/.test(val);
+          }
+          if (type === 'date') {
+            return /^\d{2,4}\/\d{2}\/\d{2}$/.test(val) || /^[A-Za-z]{3,9} \d{1,2}, \d{4}$/.test(val);
+          }
+          return true;
+        }
         if (scoreObj && typeof scoreObj === 'object') {
-          // 只用 YOLO conf，不混用 OCR
-          vals = keys.map(k => typeof scoreObj[k] === 'number' ? scoreObj[k] : 0);
+          vals = keys.map(k => {
+            let conf = typeof scoreObj[k] === 'number' ? scoreObj[k] : 0;
+            let ocrVal = ocrObj[k];
+            let formatOk = checkFormat(k, ocrVal) ? 1 : 0.5;
+            formatChecks.push(formatOk);
+            return conf * formatOk;
+          });
         }
         let avgScore = vals.length > 0 ? vals.reduce((a,b)=>a+b,0) / vals.length : 0;
         score = Math.round(avgScore * 100) + '%';
@@ -434,37 +525,57 @@ document.addEventListener('DOMContentLoaded', () => {
 
     disableActions(true);
 
-    const formData = new FormData();
-    selectedFiles.forEach((file) => formData.append('files', file));
+    // 分類：本地檔案 vs email 來源
+    const localFiles = selectedFiles.filter(f => !f.fromEmail);
+    const emailFiles = selectedFiles.filter(f => f.fromEmail);
 
     const jobId = crypto.randomUUID();
-    formData.append('job_id', jobId);
     startProgressPolling(jobId);
 
     try {
-      const response = await fetch('/upload', { method: 'POST', body: formData });
-      const payload  = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        setProgress(0, selectedFiles.length || 0, true, payload.error || response.statusText);
-        disableActions(false);
-        alert('上傳失敗: ' + (payload.error || response.statusText));
-        return;
+      let results = [];
+      // 1. 上傳本地檔案
+      if (localFiles.length > 0) {
+        const formData = new FormData();
+        localFiles.forEach((file) => formData.append('files', file));
+        formData.append('job_id', jobId);
+        const response = await fetch('/upload', { method: 'POST', body: formData });
+        const payload  = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setProgress(0, selectedFiles.length || 0, true, payload.error || response.statusText);
+          disableActions(false);
+          alert('上傳失敗: ' + (payload.error || response.statusText));
+          return;
+        }
+        results = results.concat(payload.results || payload || []);
       }
-
-      // ✅ 成功：顯示「辨識結果編輯」彈窗（不自動跳 result.html）
-      let results = payload.results || payload;
+      // 2. Email 來源檔案（直接傳 filename 給後端辨識）
+      if (emailFiles.length > 0) {
+        const filenames = emailFiles.map(f => f.filename);
+        const response = await fetch('/upload_email_files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filenames, job_id: jobId })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setProgress(0, selectedFiles.length || 0, true, payload.error || response.statusText);
+          disableActions(false);
+          alert('Email 檔案辨識失敗: ' + (payload.error || response.statusText));
+          return;
+        }
+        results = results.concat(payload.results || payload || []);
+      }
+      // 統一顯示結果
       if (!Array.isArray(results) || results.length === 0) {
         setProgress(selectedFiles.length || 0, selectedFiles.length || 0, true, '');
         disableActions(false);
         alert('沒有辨識結果');
         return;
       }
-
       recognizedResults = results.map(sanitizeRow);
       try { localStorage.setItem('recognizedResults', JSON.stringify(recognizedResults)); } catch {}
       showRecognizeResults(recognizedResults);
-
       setProgress(selectedFiles.length || recognizedResults.length,
                   selectedFiles.length || recognizedResults.length,
                   true, '');
@@ -695,9 +806,47 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('fpOk').addEventListener('click', async ()=>{
     const cond = getFilterCond();
     const all  = getAllRowsForSave();
-    const rows = filterRows(all, cond);
+    // 修正欄位名稱，確保 company_name 正確
+    const rows = filterRows(all, cond).map(row => ({
+      ...row,
+      company_name: row.company_name || row.name || '',
+      date: row.date || row.data || ''
+    }));
     if (!rows.length) { alert('沒有符合條件的發票'); return; }
 
+    try{
+      const rsp = await fetch('/confirm_result',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ items: rows })
+      });
+      const data = await rsp.json().catch(()=>({}));
+      if (!rsp.ok) throw new Error(data.error || rsp.statusText);
+      alert(`已儲存 ${data.saved||0} 筆（略過 ${data.skipped||0}）`);
+      closeFilterPicker();
+    }catch(err){
+      alert('儲存失敗：' + (err.message||err));
+    }
+  });
+
+  // 「全部儲存」→ 不經過條件，直接儲存所有資料
+  document.getElementById('fpSaveAll').addEventListener('click', async ()=>{
+    const all = getAllRowsForSave();
+    // 只送出必要欄位，並將日期轉為 yyyy-mm-dd
+    function toYMD(s){
+      if (!s) return '';
+      const d = String(s).trim().replace(/[^\d]/g,'');
+      if (d.length !== 8) return '';
+      return `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6)}`;
+    }
+    const rows = all.map(row => ({
+      num: (row.num||'').trim(),
+      sun: (row.sun||'').trim(),
+      date: toYMD(row.date||row.data||''),
+      cash: row.cash,
+      company_name: row.company_name || row.name || ''
+    }));
+    if (!rows.length) { alert('沒有可儲存的發票'); return; }
     try{
       const rsp = await fetch('/confirm_result',{
         method:'POST',

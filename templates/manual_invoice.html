@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}手動新增發票{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto bg-white rounded-2xl shadow-lg p-10">
+  <h2 class="text-3xl font-extrabold text-blue-700 mb-6 flex items-center drop-shadow">
+    <i class="fas fa-file-medical mr-3 text-2xl"></i> 手動新增發票
+  </h2>
+  <!-- 操作說明色塊 -->
+  <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-xl mb-8 shadow flex items-start gap-3 animate__animated animate__fadeIn">
+    <i class="fas fa-info-circle text-blue-500 text-2xl mt-1"></i>
+    <ul class="list-disc pl-4 text-blue-700 text-base space-y-1">
+      <li>請正確填寫發票號碼、日期、金額，避免重複或錯誤。</li>
+      <li>公司需先建立，若未出現請至「公司資料維護」新增。</li>
+      <li>附件支援 JPG、PNG、PDF，限 5MB 以內。</li>
+      <li>如有疑問請聯絡管理員。</li>
+    </ul>
+  </div>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="mb-4 space-y-2">
+        {% for m in messages %}
+          <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-3">{{ m }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <form method="POST" enctype="multipart/form-data" class="space-y-6">
+
+    <!-- 公司下拉（用 id 提交） -->
+    <div>
+      <label class="block mb-1 font-semibold text-blue-700">公司</label>
+      <select name="vendor_id" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" required>
+        <option value="">請選擇公司</option>
+        {% for c in companies %}
+          <option value="{{ c.id }}">{{ c.co_na }}（統編：{{ c.tax_id }}）</option>
+        {% endfor %}
+      </select>
+      <p class="text-sm text-gray-500 mt-1">
+        沒有看到公司？請到 <a class="underline text-blue-600" href="{{ url_for('vendor_manage') }}">公司資料維護</a> 新增。
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <div>
+        <label class="block mb-1 font-semibold text-blue-700">發票號碼</label>
+        <input type="text" name="invoice_num" maxlength="50" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" required>
+        <div class="text-sm text-gray-500 mt-1">(限 50 字內，請勿重複)</div>
+      </div>
+      <div>
+        <label class="block mb-1 font-semibold text-blue-700">開立日期</label>
+        <input type="date" name="date" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" required>
+      </div>
+      <div>
+        <label class="block mb-1 font-semibold text-blue-700">金額</label>
+        <input type="number" step="0.01" name="amount" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" required>
+      </div>
+      <div>
+        <label class="block mb-1 font-semibold text-blue-700">附件（選填）</label>
+        <input type="file" name="upload" accept=".jpg,.jpeg,.png,.pdf" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg">
+        <div class="text-sm text-gray-500 mt-1">(支援 JPG、PNG、PDF，限 5MB 以內)</div>
+      </div>
+    </div>
+
+    <div class="pt-4 flex gap-4 justify-end">
+      <button class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-7 py-3 rounded-xl font-semibold shadow inline-flex items-center text-base transition">
+        <i class="fas fa-plus mr-2"></i> 送出
+      </button>
+      <a href="{{ url_for('search') }}" class="bg-gradient-to-r from-gray-300 to-gray-400 hover:from-gray-400 hover:to-gray-500 text-black px-7 py-3 rounded-xl font-semibold shadow inline-flex items-center text-base transition">
+        <i class="fas fa-search mr-2"></i> 回到查詢
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

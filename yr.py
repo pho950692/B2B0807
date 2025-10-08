@@ -6,6 +6,69 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 from flask import request, jsonify, render_template, url_for, flash, send_from_directory
 from core_app import app  # 只使用 core_app 的 app
+# === Email 附件管理 API 與頁面 ===
+from flask import jsonify, request, render_template
+import os
+from pathlib import Path
+UPLOAD_DIR = str((Path(__file__).resolve().parent / "uploads").resolve())
+
+
+from datetime import datetime, timedelta
+
+@app.route('/api/new_invoices')
+def api_new_invoices():
+    files = []
+    if os.path.exists(UPLOAD_DIR):
+        for fname in os.listdir(UPLOAD_DIR):
+            if fname.startswith('合作公司_'):
+                files.append(fname)
+    return jsonify({'files': files, 'count': len(files)})
+
+# 依日期範圍查詢合作公司發票附件
+@app.route('/api/invoices_by_date_range')
+def api_invoices_by_date_range():
+    """
+    參數: days (int) 幾天內, 例如 1=一天內, 7=一周內, 30=一個月內, 365=一年內
+    """
+    try:
+        days = int(request.args.get('days', 1))
+    except Exception:
+        days = 1
+    now = datetime.now()
+    files = []
+    if os.path.exists(UPLOAD_DIR):
+        for fname in os.listdir(UPLOAD_DIR):
+            if fname.startswith('合作公司_'):
+                # 檔名格式: 合作公司_YYYYMMDD_...
+                parts = fname.split('_')
+                if len(parts) >= 3:
+                    try:
+                        date_str = parts[1]
+                        file_date = datetime.strptime(date_str, '%Y%m%d')
+                        if (now - file_date).days < days:
+                            files.append(fname)
+                    except Exception:
+                        continue
+    return jsonify({'files': files, 'count': len(files)})
+
+@app.route('/api/delete_invoice_file', methods=['POST'])
+def api_delete_invoice_file():
+    data = request.get_json(force=True)
+    fname = data.get('filename', '')
+    if not fname or '/' in fname or '\\' in fname:
+        return jsonify({'error': '檔名不合法'}), 400
+    fpath = os.path.join(UPLOAD_DIR, fname)
+    if not os.path.exists(fpath):
+        return jsonify({'error': '檔案不存在'}), 404
+    try:
+        os.remove(fpath)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/email_attachments')
+def email_attachments():
+    return render_template('email_attachments.html')
 
 # 路徑
 BASE_DIR   = Path(__file__).resolve().parent

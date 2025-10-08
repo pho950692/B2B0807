@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}管理員面板 - fastB2B{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-2xl shadow-lg p-12">
+  <h2 class="text-3xl font-extrabold text-blue-700 mb-6 flex items-center drop-shadow">
+    <i class="fas fa-tools mr-3 text-2xl"></i> 管理員面板
+  </h2>
+  <!-- 操作說明色塊 -->
+  <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-xl mb-8 shadow flex items-start gap-3 animate__animated animate__fadeIn">
+    <i class="fas fa-info-circle text-blue-500 text-2xl mt-1"></i>
+    <ul class="list-disc pl-4 text-blue-700 text-base space-y-1">
+      <li>本面板可管理使用者、廠商、發票及系統參數。</li>
+      <li>請定期檢查權限、資料安全，避免誤刪重要資訊。</li>
+      <li>系統設定僅限管理員操作，建議變更前先備份。</li>
+      <li>如遇異常請聯絡技術人員。</li>
+    </ul>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+    <!-- 使用者管理 -->
+    <a href="{{ url_for('admin_users') }}"
+       class="p-7 rounded-2xl shadow-lg bg-gradient-to-r from-blue-100 to-blue-50 border border-blue-200 hover:scale-105 hover:shadow-2xl transition-all duration-200 flex flex-col items-center">
+      <i class="fas fa-users text-4xl text-blue-600 mb-3"></i>
+      <h3 class="font-bold text-lg text-blue-700">使用者管理</h3>
+      <p class="text-sm text-blue-600 mt-1">檢視、刪除或變更使用者權限</p>
+    </a>
+
+    <!-- 廠商管理 -->
+    <a href="{{ url_for('admin_companies') }}"
+       class="p-7 rounded-2xl shadow-lg bg-gradient-to-r from-green-100 to-green-50 border border-green-200 hover:scale-105 hover:shadow-2xl transition-all duration-200 flex flex-col items-center">
+      <i class="fas fa-building text-4xl text-green-600 mb-3"></i>
+      <h3 class="font-bold text-lg text-green-700">廠商管理</h3>
+      <p class="text-sm text-green-600 mt-1">檢視或刪除全部廠商資料</p>
+    </a>
+
+    <!-- 發票總覽 -->
+    <a href="{{ url_for('admin_invoices') }}"
+       class="p-7 rounded-2xl shadow-lg bg-gradient-to-r from-indigo-100 to-indigo-50 border border-indigo-200 hover:scale-105 hover:shadow-2xl transition-all duration-200 flex flex-col items-center">
+      <i class="fas fa-file-invoice text-4xl text-indigo-600 mb-3"></i>
+      <h3 class="font-bold text-lg text-indigo-700">發票總覽</h3>
+      <p class="text-sm text-indigo-600 mt-1">快速檢視所有發票紀錄</p>
+    </a>
+
+    <!-- 系統設定 -->
+    <a href="{{ url_for('admin_settings') }}"
+       class="p-7 rounded-2xl shadow-lg bg-gradient-to-r from-red-100 to-red-50 border border-red-200 hover:scale-105 hover:shadow-2xl transition-all duration-200 flex flex-col items-center">
+      <i class="fas fa-cogs text-4xl text-red-600 mb-3"></i>
+      <h3 class="font-bold text-lg text-red-700">系統設定</h3>
+      <p class="text-sm text-red-600 mt-1">管理系統參數與權限</p>
+    </a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}編輯廠商 - fastB2B{% endblock %}
+
+{% block content %}
+<div class="flex justify-center pt-10">
+  <div class="w-full max-w-4xl bg-white border border-gray-300 rounded-xl shadow-lg px-10 py-12 text-xl">
+    <h2 class="text-3xl font-extrabold text-blue-700 mb-8 text-center flex items-center justify-center drop-shadow">
+      <i class="fas fa-industry mr-3 text-2xl"></i> 編輯廠商資訊
+    </h2>
+    <!-- 操作說明色塊 -->
+    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-xl mb-8 shadow flex items-start gap-3 animate__animated animate__fadeIn">
+      <i class="fas fa-info-circle text-blue-500 text-2xl mt-1"></i>
+      <ul class="list-disc pl-4 text-blue-700 text-base space-y-1">
+        <li>請正確填寫公司名稱、統一編號（8碼），避免重複。</li>
+        <li>聯絡電話可填市話或手機，負責人請填全名。</li>
+        <li>地址建議填詳細，方便後續聯絡。</li>
+        <li>公司簡介可填主要商品、服務特色，限 100 字內。</li>
+        <li>如有疑問請聯絡管理員。</li>
+      </ul>
+    </div>
+
+    <form method="POST" class="space-y-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block font-semibold text-blue-700 mb-2">公司名稱：</label>
+          <input name="company_name" value="{{ vendor.name or '' }}" required
+                 class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" />
+        </div>
+        <div>
+          <label class="block font-semibold text-blue-700 mb-2">統一編號（8碼）：</label>
+          <input name="tax_id" value="{{ vendor.tax_id or '' }}" pattern="\d{8}"
+                 class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" />
+          <div class="text-sm text-red-500 mt-1">⚠️ 統一編號限 8 位數字</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label class="block font-semibold text-blue-700 mb-2">聯絡電話：</label>
+          <input name="phone" value="{{ vendor.pho or '' }}"
+                 class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" />
+          <div class="text-sm text-gray-500 mt-1">(如：02-xxxxxxx 或 09xx-xxxxxx)</div>
+        </div>
+        <div>
+          <label class="block font-semibold text-blue-700 mb-2">負責人：</label>
+          <input name="owner" value="{{ vendor.oer or '' }}"
+                 class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" />
+        </div>
+      </div>
+
+      <div>
+        <label class="block font-semibold text-blue-700 mb-2">地址：</label>
+        <input name="address" value="{{ vendor.address or '' }}"
+               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" />
+      </div>
+
+      <div>
+        <label class="block font-semibold text-blue-700 mb-2">公司簡介：</label>
+        <input name="dtex" value="{{ vendor.dtex or '' }}" maxlength="100"
+               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" />
+        <div class="text-sm text-gray-600 mt-1">(限 100 字內，可填主要商品、服務特色)</div>
+      </div>
+
+      <div class="flex justify-end gap-4 pt-6">
+        <a href="{{ url_for('vendor_manage') }}"
+           class="bg-gradient-to-r from-gray-300 to-gray-400 hover:from-gray-400 hover:to-gray-500 text-black px-7 py-3 rounded-xl font-semibold shadow inline-flex items-center text-base transition">
+          <i class="fas fa-arrow-left mr-2"></i> 返回列表
+        </a>
+        <button class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-7 py-3 rounded-xl font-semibold shadow inline-flex items-center text-base transition">
+          <i class="fas fa-save mr-2"></i> 儲存
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

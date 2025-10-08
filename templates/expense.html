@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}廠商支出紀錄{% endblock %}
+
+{% block content %}
+  <div class="max-w-3xl mx-auto py-10 px-4">
+    <h2 class="text-3xl font-extrabold text-blue-700 mb-6 flex items-center drop-shadow">
+      <i class="fas fa-chart-line mr-3 text-2xl"></i> 各廠商支出折線圖
+    </h2>
+    <!-- 操作說明色塊 -->
+    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-xl mb-8 shadow flex items-start gap-3 animate__animated animate__fadeIn">
+      <i class="fas fa-info-circle text-blue-500 text-2xl mt-1"></i>
+      <ul class="list-disc pl-4 text-blue-700 text-base space-y-1">
+        <li>可依廠商、日期等條件篩選支出紀錄。</li>
+        <li>折線圖顯示各廠商支出趨勢，資料來源為系統登錄發票。</li>
+        <li>可一鍵匯出 PDF 報表，方便財務管理。</li>
+        <li>如需匯出 Excel/CSV，請聯絡管理員或於報表頁操作。</li>
+      </ul>
+    </div>
+
+    <form id="filter-form" class="bg-white rounded-xl shadow-lg p-6 mb-8 grid grid-cols-1 md:grid-cols-3 gap-6 text-lg">
+      <!-- 篩選條件可依需求補充 -->
+      <!-- <div>
+        <label class="block font-semibold text-blue-700 mb-2">廠商名稱</label>
+        <input type="text" name="company_name" class="w-full border border-gray-300 rounded-lg px-4 py-3">
+      </div> -->
+    </form>
+
+    <div id="chart-container" class="bg-white rounded-2xl shadow-lg p-8 mb-8">
+      <canvas id="expenseChart"></canvas>
+    </div>
+
+    <div class="flex justify-end gap-4">
+      <button id="exportPdfBtn" class="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-7 py-3 rounded-xl font-semibold shadow inline-flex items-center text-base transition">
+        <i class="fas fa-file-pdf mr-2"></i> 匯出 PDF
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // 這裡放 Chart.js 與匯出 PDF 的 JavaScript 內容
+  </script>
+{% endblock %}

@@ -201,17 +201,41 @@ def _clean_sun(raw: str) -> str:
 
 def _clean_date(raw: str) -> str:
     # 統一回傳 YYYY/MM/DD 格式，無法解析則回空字串
-    date_str = _clean_year_range(_parse_date(raw or ""))
+    s = (raw or "").strip()
+    # 若同時有日期和金額，先分割
+    # 例：2025/07/09 TWD 6925 或 20250709TWD6925
+    m = re.match(r"(\d{4}[./-]\d{2}[./-]\d{2}|\d{8})", s)
+    if m:
+        s = m.group(1)
+    # mi 類常見 20250709 這種無分隔格式，自動補斜線
+    if re.match(r"^\d{8}$", s):
+        s = f"{s[:4]}/{s[4:6]}/{s[6:]}"
+    date_str = _clean_year_range(_parse_date(s))
     return date_str if date_str else ""
 
 def _clean_cash(raw: str, inv_type: str = "") -> str:
     if not raw:
         return ""
+    if inv_type == "mi":
+        # 自動補空格：TWD6925 → TWD 6925
+        s = re.sub(r"([A-Z]{2,4})(\d{2,})", r"\1 \2", raw)
+        # 若同時有日期和金額，先分割
+        # 例：2025/07/09 TWD 6925 或 20250709TWD6925
+        date_pat = r"(\d{4}[./-]\d{2}[./-]\d{2}|\d{8})"
+        cash_pat = r"\d{1,3}(?:,\d{3})*(?:\.\d+)?"
+        m = re.search(date_pat + r"\s*([A-Z]{2,4}\s*\d{1,})", s)
+        if m:
+            s = m.group(2)
+        # 只抓數字部分
+        m = re.search(cash_pat, s)
+        if m:
+            return m.group(0).replace(",", "")
+        return ""
     if inv_type == "pc":
         # 只抓「總計:」後面的數字（純數字，不含元）
         nums = re.findall(r"\d{1,3}(?:,\s?\d{3})*(?:\.\d+)?", raw)
         if nums:
-            return re.sub(r"[,\s]", "", nums[-1])  # ← 同時移除逗號與空白，"3, 600" -> "3600"
+            return re.sub(r"[,\\s]", "", nums[-1])  # ← 同時移除逗號與空白
         return ""
     # 其他票種維持原本邏輯
     s = re.sub(r"[^\d.,]", "", raw)
@@ -219,7 +243,6 @@ def _clean_cash(raw: str, inv_type: str = "") -> str:
     if not m:
         return ""
     return m.group(0).replace(",", "")
-
 
 
 # ========== 版型錨點規則 ==========
@@ -281,7 +304,7 @@ def ocr_fields_from_crops(crops: Dict[str, str], inv_type: str) -> Dict[str, str
     for k in ("num","date","sun","cash"):
         p = crops.get(k)
         if p:
-            # 大文本用一般英文字元，不限白名單（保留 anchor）
+            # mi 和 op 只用英文包，pc 保持原設定
             lang_pool = "eng" if inv in ("mi", "op") else "chi_tra+eng"
             segs.append(_read_as_text(p, lang=lang_pool))
     pool = "\n".join([s for s in segs if s])
@@ -291,6 +314,7 @@ def ocr_fields_from_crops(crops: Dict[str, str], inv_type: str) -> Dict[str, str
     # 接著逐欄位補強：針對各欄位使用對應的 tesseract 白名單
     if crops.get("num") and not out["num"]:
         if inv in ("mi", "op"):
+            # mi 和 op 使用純英文包
             out["num"] = _clean_num(_read_alnum(crops["num"]), inv)
         else:  # pc
             out["num"] = _clean_num(_read_alnum(crops["num"]), inv)
@@ -316,8 +340,9 @@ def ocr_fields_from_crops(crops: Dict[str, str], inv_type: str) -> Dict[str, str
     # === 若 OCR 結果為空，自動補原始裁切圖 OCR ===
     for k in ("num", "date", "sun", "cash"):
         if crops.get(k) and not out.get(k):
-            # 直接用原始裁切圖 OCR，不做規則清洗
-            out[k] = _read_as_text(crops[k], lang="eng")
+            # mi 和 op 只用英文包，pc 保持原設定
+            lang_fallback = "eng" if inv in ("mi", "op") else "chi_tra+eng"
+            out[k] = _read_as_text(crops[k], lang=lang_fallback)
 
     return out
 
@@ -355,7 +380,7 @@ def fullpage_anchor_ocr(img_bgr, inv_type: str):
     if cv2 is None:
         return {"num":"", "date":"", "sun":"", "cash":""}
     inv = (inv_type or "").lower()
-    # PDF/英文化的票種用英文；台灣 PC 若要備援可用 chi_tra+eng
+    # mi 和 op 只用英文包，pc 保持原設定
     lang = "eng" if inv in ("mi", "op") else "chi_tra+eng"
     proc = _preprocess(img_bgr)
     txt = pytesseract.image_to_string(proc, lang=lang, config="--oem 1 --psm 6") if proc is not None else ""

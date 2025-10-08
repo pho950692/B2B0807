@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block title %}統計報表 - fastB2B{% endblock %}
+
+{% block head_extra %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
+  <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/bundle.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="px-6 md:px-10 py-8">
+  <h2 class="text-4xl font-extrabold text-blue-700 mb-8 flex items-center drop-shadow">
+    <i class="fas fa-chart-bar mr-3 text-4xl"></i> 統計報表
+  </h2>
+  <!-- 操作說明色塊 -->
+  <div class="bg-blue-50 border-l-4 border-blue-400 p-4 rounded-xl mb-8 shadow flex items-start gap-3 animate__animated animate__fadeIn">
+    <i class="fas fa-info-circle text-blue-500 text-2xl mt-1"></i>
+    <ul class="list-disc pl-4 text-blue-700 text-base space-y-1">
+      <li>可依廠商、日期區間篩選發票統計，快速掌握金額與數量趨勢。</li>
+      <li>快速範圍可一鍵選本月、近三個月、今年至今。</li>
+      <li>下方圖表可切換不同統計維度，點按切換按鈕。</li>
+      <li>如需匯出報表，請聯絡管理員或於報表頁操作。</li>
+    </ul>
+  </div>
+
+  <!-- 篩選 -->
+  <form method="POST" action="{{ url_for('inv_re') }}" class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 text-xl bg-white rounded-2xl shadow-lg p-6">
+    <div>
+      <label for="vendor" class="block font-semibold mb-2">選擇廠商：</label>
+      <select id="vendor" name="vendor" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg">
+        <option value="">全部廠商</option>
+        {% for c in companies %}
+          <option value="{{ c.id }}" {% if selected_vendor and selected_vendor|int == c.id %}selected{% endif %}>
+            {{ c.co_na }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label for="date_range" class="block font-semibold mb-2">日期區間（依發票日期）：</label>
+      <input id="date_range" name="date_range" type="text" placeholder="YYYY-MM-DD - YYYY-MM-DD"
+             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg" value="{{ date_range or '' }}" />
+      <div class="flex flex-wrap gap-2 mt-2 text-sm">
+        <button type="button" class="quick px-4 py-2 rounded-xl border bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 font-semibold shadow inline-flex items-center transition" data-range="this_month">
+          <i class="fas fa-calendar-alt mr-2"></i> 本月
+        </button>
+        <button type="button" class="quick px-4 py-2 rounded-xl border bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 font-semibold shadow inline-flex items-center transition" data-range="last_3m">
+          <i class="fas fa-calendar mr-2"></i> 近三個月
+        </button>
+        <button type="button" class="quick px-4 py-2 rounded-xl border bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 font-semibold shadow inline-flex items-center transition" data-range="ytd">
+          <i class="fas fa-calendar-check mr-2"></i> 今年至今
+        </button>
+        <button type="button" class="quick px-4 py-2 rounded-xl border bg-gray-100 text-gray-700 font-semibold shadow inline-flex items-center transition" data-range="clear">
+          <i class="fas fa-eraser mr-2"></i> 清除
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-end">
+      <button type="submit" class="w-full md:w-auto bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl px-7 py-3 text-lg font-semibold shadow inline-flex items-center transition">
+        <i class="fas fa-filter mr-2"></i> 套用篩選
+      </button>
+    </div>
+  </form>
+
+  <!-- 圖表：上兩張照原本篩選，下方可切換 -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- 1) 每月金額趨勢（Line） -->
+    <div class="bg-white rounded-2xl shadow-lg p-8">
+      <h3 class="text-2xl font-bold mb-6 text-blue-700 flex items-center">
+        <i class="fas fa-chart-line mr-2"></i> 每月發票金額趨勢
+      </h3>
+      <canvas id="lineMonthly"></canvas>
+    </div>
+
+    <!-- 2) 各廠商金額占比（Pie） -->
+    <div class="bg-white rounded-2xl shadow-lg p-8">
+      <h3 class="text-2xl font-bold mb-6 text-blue-700 flex items-center">
+        <i class="fas fa-chart-pie mr-2"></i> 各廠商金額占比
+      </h3>
+      <canvas id="pieVendors"></canvas>
+    </div>
+
+    <!-- 3) 發票數量趨勢（Line，可切換） -->
+    <div class="bg-white rounded-2xl shadow-lg p-8 lg:col-span-2">
+      <div class="flex justify-between items-center mb-6">
+        <h3 class="text-2xl font-bold text-blue-700 flex items-center">
+          <i class="fas fa-chart-area mr-2"></i> 發票數量趨勢
+        </h3>
+        <div class="space-x-2">
+          <button type="button" class="switch-mode px-5 py-2 rounded-xl border bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold shadow inline-flex items-center transition" data-mode="created">
+            <i class="fas fa-clock mr-2"></i> 依登錄時間
+          </button>
+          <button type="button" class="switch-mode px-5 py-2 rounded-xl border bg-gray-100 text-blue-700 font-semibold shadow inline-flex items-center transition" data-mode="date">
+            <i class="fas fa-calendar-day mr-2"></i> 依發票日期
+          </button>
+        </div>
+      </div>
+      <canvas id="lineCounts"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 後端資料
+  const totalAmountByMonth = {{ total_amount_by_month | tojson }}; // [{month,total}]
+  const vendorAmountPie   = {{ vendor_amount_ratio   | tojson }}; // [{name,total}]
+  const invoiceCountTrend = {{ invoice_count_trend   | tojson }}; // {created:[{date,count}], date:[{date,count}]}
+
+  // 1) 每月金額趨勢
+  new Chart(document.getElementById('lineMonthly'), {
+    type: 'line',
+    data: {
+      labels: totalAmountByMonth.map(x => x.month),
+      datasets: [{ label: '總金額', data: totalAmountByMonth.map(x => x.total), tension: 0.25 }]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+
+  // 2) 各廠商金額占比
+  new Chart(document.getElementById('pieVendors'), {
+    type: 'pie',
+    data: {
+      labels: vendorAmountPie.map(x => x.name),
+      datasets: [{ data: vendorAmountPie.map(x => x.total) }]
+    },
+    options: { responsive: true }
+  });
+
+  // 3) 發票數量趨勢（可切換）
+  let mode = 'created'; // 預設依登錄時間
+  const ctxCounts = document.getElementById('lineCounts');
+  const countsChart = new Chart(ctxCounts, {
+    type: 'line',
+    data: {
+      labels: (invoiceCountTrend[mode] || []).map(x => x.date),
+      datasets: [{ label: '發票數量', data: (invoiceCountTrend[mode] || []).map(x => x.count), tension: 0.25 }]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+  });
+
+  document.querySelectorAll('.switch-mode').forEach(btn => {
+    btn.addEventListener('click', () => {
+      mode = btn.dataset.mode;
+      // 樣式切換
+      document.querySelectorAll('.switch-mode').forEach(b => b.classList.remove('bg-blue-600','text-white'));
+      btn.classList.add('bg-blue-600','text-white');
+      // 重設資料
+      const rows = invoiceCountTrend[mode] || [];
+      countsChart.data.labels = rows.map(x => x.date);
+      countsChart.data.datasets[0].data = rows.map(x => x.count);
+      countsChart.update();
+    });
+  });
+
+  // Litepicker + 快速範圍
+  const dr = document.getElementById('date_range');
+  const picker = new Litepicker({
+    element: dr, singleMode: false, format: 'YYYY-MM-DD',
+    numberOfMonths: 2, numberOfColumns: 2, autoApply: false,
+    dropdowns: { minYear: 2018, maxYear: new Date().getFullYear(), months: true, years: true }
+  });
+
+  function setQuickRange(type){
+    const t = new Date(), y = t.getFullYear(), m = t.getMonth();
+    let s, e;
+    if (type === 'this_month') { s = new Date(y, m, 1); e = new Date(y, m+1, 0); }
+    else if (type === 'last_3m') { e = t; s = new Date(y, m-2, 1); }
+    else if (type === 'ytd') { s = new Date(y, 0, 1); e = t; }
+    else if (type === 'clear') { dr.value=''; picker.clearSelection(); return; }
+    const pad = n => String(n).padStart(2,'0');
+    const fmt = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    dr.value = `${fmt(s)} - ${fmt(e)}`; picker.setDateRange(s, e, true);
+  }
+  document.querySelectorAll('button.quick').forEach(btn => {
+    btn.addEventListener('click', () => setQuickRange(btn.dataset.range));
+  });
+</script>
+{% endblock %}

@@ -1,155 +1,561 @@
 {% extends "base.html" %}
 
-{% block title %}各廠商發票紀錄{% endblock %}
+{% block title %}發票查詢與管理{% endblock %}
 
 {% block head_extra %}
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
   <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/bundle.js"></script>
   <style>
-    /* 「用照片查詢」區塊 */
-    .photo-search { display:flex; align-items:center; gap:.75rem; flex-wrap:wrap; margin: 0 0 1rem 0; }
+    /* 漸層背景 */
+    .gradient-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    /* 卡片樣式 */
+    .card {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      transition: all 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* 查詢表單優化 */
+    .search-form {
+      background: linear-gradient(145deg, #f8fafc, #e2e8f0);
+      border: 1px solid #e2e8f0;
+      border-radius: 1rem;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    
+    /* 輸入框樣式 */
+    .input-enhanced {
+      transition: all 0.3s ease;
+      border: 2px solid #e2e8f0;
+    }
+    .input-enhanced:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+      transform: scale(1.02);
+      outline: none;
+    }
+    
+    /* 照片查詢區塊 */
+    .photo-search { 
+      display: flex; 
+      align-items: center; 
+      gap: 0.75rem; 
+      flex-wrap: wrap; 
+      margin: 0 0 1.5rem 0;
+      padding: 1.5rem;
+      background: linear-gradient(145deg, #fef7ff, #f3e8ff);
+      border: 2px dashed #a855f7;
+      border-radius: 1rem;
+      transition: all 0.3s ease;
+    }
+    .photo-search:hover {
+      border-color: #7c3aed;
+      background: linear-gradient(145deg, #faf5ff, #ede9fe);
+    }
 
-    /* 按鈕 */
-    .btn { border:1px solid #1e40af; background:#1d4ed8; color:#fff; padding:.55rem 1rem; border-radius:.5rem; font-weight:600; cursor:pointer; }
-    .btn:hover { background:#1e3a8a; }
-    .btn-outline { background:#fff; color:#1d4ed8; border-color:#1d4ed8; }
-    .btn-outline:hover { background:#eff6ff; }
+    /* 按鈕樣式 */
+    .btn { 
+      border: 1px solid #1e40af; 
+      background: linear-gradient(145deg, #3b82f6, #1d4ed8); 
+      color: #fff; 
+      padding: 0.75rem 1.5rem; 
+      border-radius: 0.75rem; 
+      font-weight: 600; 
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    }
+    .btn:hover { 
+      background: linear-gradient(145deg, #1d4ed8, #1e3a8a);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+    }
+    .btn-outline { 
+      background: linear-gradient(145deg, #ffffff, #f8fafc); 
+      color: #1d4ed8; 
+      border-color: #3b82f6;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.2);
+    }
+    .btn-outline:hover { 
+      background: linear-gradient(145deg, #eff6ff, #dbeafe);
+      transform: translateY(-2px);
+    }
 
-    /* 檔名小標籤 */
-    .chip { font-size:.9rem; padding:.35rem .6rem; border:1px solid #d1d5db; border-radius:.375rem; background:#f9fafb; color:#111827; }
+    /* 檔名標籤 */
+    .chip { 
+      font-size: 0.9rem; 
+      padding: 0.5rem 1rem; 
+      border: 1px solid #d1d5db; 
+      border-radius: 2rem; 
+      background: linear-gradient(145deg, #f9fafb, #f3f4f6); 
+      color: #374151;
+      transition: all 0.3s ease;
+    }
 
-    /* 圖片預覽 Modal */
-    .modal { position:fixed; inset:0; display:none; z-index:60; }
-    .modal.show { display:block; }
-    .modal .backdrop { position:absolute; inset:0; background:rgba(0,0,0,.55); }
-    .modal .dialog { position:relative; z-index:1; max-width:min(92vw, 1100px); margin:6vh auto; background:#111827; padding:0; border-radius:.75rem; box-shadow:0 20px 45px rgba(0,0,0,.35); }
-    .modal header { display:flex; justify-content:space-between; align-items:center; padding:.6rem .9rem; color:#fff; background:#1f2937; border-top-left-radius:.75rem; border-top-right-radius:.75rem; }
-    .modal .close { appearance:none; border:none; background:transparent; color:#9ca3af; font-size:1.6rem; cursor:pointer; padding:.2rem .4rem; line-height:1; }
-    .modal .close:hover { color:#fff; }
-    .modal .body { background:#000; }
-    .modal .body img { display:block; max-width:100%; height:auto; margin:0 auto; }
+    /* 快速選擇按鈕 */
+    .quick {
+      transition: all 0.3s ease;
+      border: 1px solid #d1d5db;
+      background: linear-gradient(145deg, #ffffff, #f8fafc);
+    }
+    .quick:hover {
+      border-color: #3b82f6;
+      background: linear-gradient(145deg, #eff6ff, #dbeafe);
+      transform: scale(1.05);
+    }
+
+    /* 表格樣式 */
+    .table-container {
+      background: white;
+      border-radius: 1rem;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    }
+    
+    .enhanced-table {
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    .enhanced-table th {
+      background: linear-gradient(145deg, #1f2937, #374151);
+      color: white;
+      font-weight: 600;
+      text-align: center;
+      padding: 1rem;
+      border: none;
+    }
+    .enhanced-table td {
+      padding: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      transition: background-color 0.3s ease;
+    }
+    .enhanced-table tr:hover td {
+      background-color: #f0f9ff;
+    }
+
+    /* 圖片預覽模態框 */
+    .modal { position: fixed; inset: 0; display: none; z-index: 60; }
+    .modal.show { display: block; }
+    .modal .backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); }
+    .modal .dialog { 
+      position: relative; 
+      z-index: 1; 
+      max-width: min(92vw, 1100px); 
+      margin: 6vh auto; 
+      background: #111827; 
+      padding: 0; 
+      border-radius: 1rem; 
+      box-shadow: 0 25px 50px rgba(0,0,0,0.5);
+      overflow: hidden;
+    }
+    .modal header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      padding: 1rem 1.5rem; 
+      color: #fff; 
+      background: linear-gradient(145deg, #1f2937, #374151);
+      font-weight: 600;
+    }
+    .modal .close { 
+      appearance: none; 
+      border: none; 
+      background: transparent; 
+      color: #9ca3af; 
+      font-size: 1.8rem; 
+      cursor: pointer; 
+      padding: 0.5rem; 
+      line-height: 1;
+      border-radius: 0.5rem;
+      transition: all 0.3s ease;
+    }
+    .modal .close:hover { 
+      color: #fff; 
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .modal .body { background: #000; }
+    .modal .body img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+
+    /* 功能說明區塊 */
+    .feature-info {
+      background: linear-gradient(145deg, #f0f9ff, #e0f2fe);
+      border: 1px solid #0284c7;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    /* 統計卡片 */
+    .stat-card {
+      background: linear-gradient(145deg, #ffffff, #f8fafc);
+      border: 1px solid #e2e8f0;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+    .stat-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
   </style>
 {% endblock %}
 
 {% block content %}
-<div class="px-10 py-8">
-  <h2 class="text-3xl font-bold text-blue-700 mb-8 text-left">各廠商發票紀錄</h2>
-
-  <form method="POST" action="{{ url_for('search') }}">
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10 text-lg">
-      <!-- 廠商 -->
-      <div>
-        <label for="vendor" class="block font-semibold mb-2">選擇廠商：</label>
-        <select id="vendor" name="vendor" class="w-full border border-gray-400 rounded px-4 py-3 text-lg">
-          <option value="">全部廠商</option>
-          {% for c in companies %}
-            <option value="{{ c.id }}" {% if selected_vendor and selected_vendor == c.id %}selected{% endif %}>
-              {{ c.co_na }}
-            </option>
-          {% endfor %}
-        </select>
+<!-- 頁面標題區 -->
+<div class="gradient-bg text-white py-12 mb-8">
+  <div class="max-w-7xl mx-auto px-6">
+    <div class="text-center">
+      <h1 class="text-4xl md:text-5xl font-extrabold mb-4 flex items-center justify-center drop-shadow">
+        <i class="fas fa-search-dollar mr-4 text-3xl"></i> 發票查詢與管理
+      </h1>
+      <p class="text-xl md:text-2xl text-blue-100 mb-6">輕鬆查詢、管理與分析您的發票記錄</p>
+      <!-- 查詢/安全/流程說明色塊 -->
+      <div class="bg-blue-100 border-l-4 border-blue-400 p-4 rounded-xl mb-8 shadow flex items-center gap-3 animate__animated animate__fadeIn">
+        <i class="fas fa-info-circle text-blue-500 text-2xl"></i>
+        <span class="text-blue-700 text-lg font-semibold">查詢前請確認：1. 日期/廠商/條件正確 2. 匯出資料僅限授權人員 3. 圖片查詢請上傳清晰發票照 4. 若查無結果可放寬條件或聯絡管理員</span>
       </div>
-
-      <!-- 日期依據 -->
-      <div>
-        <label for="date_mode" class="block font-semibold mb-2">日期依據：</label>
-        <select id="date_mode" name="date_mode" class="w-full border border-gray-400 rounded px-4 py-3 text-lg">
-          <option value="in_date"    {% if date_mode != 'created_at' %}selected{% endif %}>發票日期</option>
-          <option value="created_at" {% if date_mode == 'created_at' %}selected{% endif %}>登錄時間</option>
-        </select>
-        <p class="text-sm text-gray-500 mt-1">下方日期區間會套用在此欄位</p>
+      <div class="flex flex-wrap justify-center gap-4 text-sm md:text-base">
+        <span class="bg-white bg-opacity-20 px-4 py-2 rounded-full">🔍 智能搜尋</span>
+        <span class="bg-white bg-opacity-20 px-4 py-2 rounded-full">📱 圖片查詢</span>
+        <span class="bg-white bg-opacity-20 px-4 py-2 rounded-full">📊 數據導出</span>
+        <span class="bg-white bg-opacity-20 px-4 py-2 rounded-full">📈 統計分析</span>
       </div>
-
-      <!-- 日期區間 -->
-      <div>
-        <label for="date_range" class="block font-semibold mb-2">日期區間：</label>
-        <input id="date_range" name="date_range" type="text" placeholder="YYYY-MM-DD - YYYY-MM-DD"
-               class="w-full border border-gray-400 rounded px-4 py-3 bg-white cursor-pointer text-lg"
-               value="{{ date_range or '' }}" />
-        <div class="flex flex-wrap gap-2 mt-2 text-sm">
-          <button type="button" class="quick px-3 py-1 rounded border" data-range="this_month">本月</button>
-          <button type="button" class="quick px-3 py-1 rounded border" data-range="last_3m">近三個月</button>
-          <button type="button" class="quick px-3 py-1 rounded border" data-range="ytd">今年至今</button>
-          <button type="button" class="quick px-3 py-1 rounded border" data-range="clear">清除</button>
-        </div>
-      </div>
-
-      <!-- 送出 -->
-      <div class="flex items-end self-end">
-        <button type="submit" class="bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700 text-lg font-semibold w-full">
-          查詢
-        </button>
-      </div>
-    </div>
-  </form>
-
-  <form id="photoSearch" action="/search/photo" method="post" enctype="multipart/form-data" class="photo-search">
-    <input id="photoInput" type="file" name="photos" accept="image/*" multiple style="display:none">
-    <button type="button" id="photoBtn" class="btn">📷 用照片查詢</button>
-    <span id="photoName" class="chip">未選擇檔案</span>
-    <button type="submit" id="photoSubmit" class="btn btn-outline" disabled>開始比對</button>
-  </form>
-
-  <div class="bg-white border border-gray-400 shadow rounded-lg p-6 text-lg">
-    <h2 class="text-2xl font-bold mb-6 text-gray-800">發票清單</h2>
-    <div class="mb-4 flex items-center gap-4">
-      <button id="downloadExcelBtn" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded text-base font-semibold">下載 Excel</button>
-      <span class="text-gray-500 text-sm">可勾選要下載的發票</span>
-    </div>
-    <div class="overflow-x-auto">
-      <table class="min-w-full border border-black text-lg text-left">
-        <thead class="bg-gray-200">
-          <tr>
-            <th class="border border-black px-6 py-3"><input type="checkbox" id="checkAllInvoices" /></th>
-            <th class="border border-black px-6 py-3">發票號碼</th>
-            <th class="border border-black px-6 py-3">統一編號</th>
-            <th class="border border-black px-6 py-3">
-              {% if date_mode == 'created_at' %}登錄日期{% else %}發票日期{% endif %}
-            </th>
-            <th class="border border-black px-6 py-3">價格</th>
-            <th class="border border-black px-6 py-3">公司名稱</th>
-            <th class="border border-black px-6 py-3">登錄時間</th>
-            <th class="border border-black px-6 py-3">查看圖片</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% if invoices %}
-            {% for inv in invoices %}
-              <tr class="odd:bg-white even:bg-gray-100">
-                <td class="border border-black px-6 py-3 text-center">
-                  <input type="checkbox" class="invoiceCheck" data-idx="{{ loop.index0 }}" />
-                </td>
-                <td class="border border-black px-6 py-3">{{ inv.num }}</td>
-                <td class="border border-black px-6 py-3">{{ inv.snu }}</td>
-                <td class="border border-black px-6 py-3">
-                  {% if date_mode == 'created_at' %}
-                    {{ inv.ctime }}
-                  {% else %}
-                    {{ inv.data }}
-                  {% endif %}
-                </td>
-                <td class="border border-black px-6 py-3">{{ inv.price }}</td>
-                <td class="border border-black px-6 py-3">{{ inv.bun }}</td>
-                <td class="border border-black px-6 py-3">{{ inv.ctime }}</td>
-                <td class="border border-black px-6 py-3">
-                  {% if inv.img_url %}
-                    <button type="button" class="btn btn-outline" data-preview="{{ inv.img_url }}">預覽</button>
-                  {% else %}
-                    無附件
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          {% else %}
-            <tr>
-              <td colspan="7" class="text-center py-6 text-gray-500">目前沒有資料</td>
-            </tr>
-          {% endif %}
-        </tbody>
-      </table>
     </div>
   </div>
-<!-- 圖片預覽 Modal -->
+</div>
+
+<div class="max-w-7xl mx-auto px-6 pb-12">
+  <!-- 功能說明區塊 -->
+  <div class="feature-info mb-8">
+    <div class="flex items-start gap-4">
+      <div class="text-3xl">💡</div>
+      <div>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">查詢功能說明</h3>
+        <div class="grid md:grid-cols-2 gap-4 text-sm text-gray-600">
+          <div>
+            <p><strong>📅 日期查詢：</strong>可選擇「發票日期」或「登錄時間」作為查詢依據，支援快速選擇時間範圍</p>
+            <p><strong>🏢 廠商篩選：</strong>可選擇特定廠商或查看全部廠商的發票記錄</p>
+          </div>
+          <div>
+            <p><strong>📷 圖片查詢：</strong>上傳發票照片進行智能比對，快速找到相似的發票記錄</p>
+            <p><strong>📊 批量下載：</strong>勾選發票後可一鍵下載 Excel 格式的詳細報表</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 查詢表單 -->
+  <div class="search-form">
+    <h2 class="text-2xl font-bold text-blue-700 mb-6 flex items-center gap-3">
+      <i class="fas fa-sliders-h mr-2 text-xl"></i> 智能查詢設定
+    </h2>
+    
+    <form method="POST" action="{{ url_for('search') }}">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <!-- 廠商選擇 -->
+        <div>
+          <label for="vendor" class="block font-semibold mb-3 text-blue-700 flex items-center gap-2">
+            <i class="fas fa-industry mr-2 text-lg"></i> 選擇廠商：
+          </label>
+          <select id="vendor" name="vendor" class="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-lg input-enhanced focus:border-blue-500">
+            <option value="">🌐 全部廠商</option>
+            {% for c in companies %}
+              <option value="{{ c.id }}" {% if selected_vendor and selected_vendor == c.id %}selected{% endif %}>
+                {{ c.co_na }}
+              </option>
+            {% endfor %}
+          </select>
+          <p class="text-sm text-gray-500 mt-1">選擇特定廠商或查看全部</p>
+        </div>
+
+        <!-- 日期依據 -->
+        <div>
+          <label for="date_mode" class="block font-semibold mb-3 text-blue-700 flex items-center gap-2">
+            <i class="fas fa-calendar-alt mr-2 text-lg"></i> 日期依據：
+          </label>
+          <select id="date_mode" name="date_mode" class="w-full border-2 border-gray-300 rounded-lg px-4 py-3 text-lg input-enhanced focus:border-blue-500">
+            <option value="in_date" {% if date_mode != 'created_at' %}selected{% endif %}>📄 發票日期</option>
+            <option value="created_at" {% if date_mode == 'created_at' %}selected{% endif %}>⏰ 登錄時間</option>
+          </select>
+          <p class="text-sm text-gray-500 mt-1">選擇查詢的時間基準</p>
+        </div>
+
+        <!-- 日期區間 -->
+        <div>
+          <label for="date_range" class="block font-semibold mb-3 text-blue-700 flex items-center gap-2">
+            <i class="fas fa-calendar-day mr-2 text-lg"></i> 日期區間：
+          </label>
+          <input id="date_range" name="date_range" type="text" placeholder="YYYY-MM-DD - YYYY-MM-DD"
+                 class="w-full border-2 border-gray-300 rounded-lg px-4 py-3 bg-white cursor-pointer text-lg input-enhanced"
+                 value="{{ date_range or '' }}" />
+          <div class="flex flex-wrap gap-2 mt-3">
+            <button type="button" class="quick px-3 py-2 rounded-lg text-sm font-medium" data-range="this_month">📅 本月</button>
+            <button type="button" class="quick px-3 py-2 rounded-lg text-sm font-medium" data-range="last_3m">📊 近三個月</button>
+            <button type="button" class="quick px-3 py-2 rounded-lg text-sm font-medium" data-range="ytd">📈 今年至今</button>
+            <button type="button" class="quick px-3 py-2 rounded-lg text-sm font-medium" data-range="clear">🗑️ 清除</button>
+          </div>
+        </div>
+
+        <!-- 查詢按鈕 -->
+        <div class="flex items-end">
+          <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4 rounded-xl font-semibold shadow inline-flex items-center text-lg transition hover:from-blue-700 hover:to-blue-800 hover:scale-105">
+            <i class="fas fa-search mr-2"></i> 開始查詢
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <!-- 圖片查詢區塊 -->
+  <div class="card p-6 mb-8">
+    <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+      <span class="text-2xl">📷</span>
+      智能圖片查詢
+    </h3>
+    <p class="text-gray-600 mb-4">上傳發票照片，系統將自動比對相似的發票記錄，讓您快速找到目標資料</p>
+    
+    <form id="photoSearch" action="/search/photo" method="post" enctype="multipart/form-data" class="photo-search">
+      <input id="photoInput" type="file" name="photos" accept="image/*" multiple style="display:none">
+      <button type="button" id="photoBtn" class="btn flex items-center gap-2">
+        <span class="text-lg">📷</span>
+        選擇照片查詢
+      </button>
+      <span id="photoName" class="chip">📂 未選擇檔案</span>
+      <button type="submit" id="photoSubmit" class="btn btn-outline flex items-center gap-2" disabled>
+        <span class="text-lg">🚀</span>
+        開始比對
+      </button>
+    </form>
+    
+    <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <h4 class="font-semibold text-blue-800 mb-2">💡 使用提示：</h4>
+      <ul class="text-sm text-blue-700 space-y-1">
+        <li>• 支援 JPG、PNG 等常見圖片格式</li>
+        <li>• 可同時上傳多張照片進行批量比對</li>
+        <li>• 建議上傳清晰、完整的發票照片以獲得最佳比對效果</li>
+        <li>• 系統會自動識別發票內容並找出相似記錄</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 發票清單 -->
+  <div class="card p-6">
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-2xl font-bold text-blue-700 flex items-center gap-3">
+        <i class="fas fa-list-alt mr-2 text-2xl"></i> 發票清單
+      </h2>
+      {% if invoices %}
+        <div class="text-sm text-gray-500">
+          共找到 <span class="font-bold text-blue-600">{{ invoices|length }}</span> 筆記錄
+        </div>
+      {% endif %}
+    </div>
+    
+    <!-- 操作按鈕區 -->
+    <div class="mb-6 flex flex-wrap items-center gap-4">
+      <button id="downloadExcelBtn" class="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white px-6 py-3 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center gap-2">
+        <span class="text-lg">📊</span>
+        下載 Excel 報表
+      </button>
+      <div class="text-gray-500 text-sm flex items-center gap-2">
+        <span class="text-lg">💡</span>
+        勾選要下載的發票，支援批量匯出詳細資料
+      </div>
+    </div>
+    
+    <!-- 表格容器 -->
+    <div class="table-container">
+      <div class="overflow-x-auto">
+        <table class="min-w-full enhanced-table">
+          <thead>
+            <tr>
+              <th class="px-6 py-4"><input type="checkbox" id="checkAllInvoices" class="w-4 h-4" /></th>
+              <th class="px-6 py-4">📄 發票號碼</th>
+              <th class="px-6 py-4">🏢 統一編號</th>
+              <th class="px-6 py-4">
+                {% if date_mode == 'created_at' %}⏰ 登錄日期{% else %}📅 發票日期{% endif %}
+              </th>
+              <th class="px-6 py-4">💰 價格</th>
+              <th class="px-6 py-4">🏪 公司名稱</th>
+              <th class="px-6 py-4">📝 登錄時間</th>
+              <th class="px-6 py-4">🖼️ 查看圖片</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if invoices %}
+              {% for inv in invoices %}
+                <tr class="transition-colors duration-200">
+                  <td class="px-6 py-4 text-center">
+                    <input type="checkbox" class="invoiceCheck w-4 h-4" data-idx="{{ loop.index0 }}" />
+                  </td>
+                  <td class="px-6 py-4 font-mono text-blue-600 font-semibold">{{ inv.num }}</td>
+                  <td class="px-6 py-4 font-mono">{{ inv.snu }}</td>
+                  <td class="px-6 py-4">
+                    {% if date_mode == 'created_at' %}
+                      <span class="text-gray-600">{{ inv.ctime }}</span>
+                    {% else %}
+                      <span class="text-gray-600">{{ inv.data }}</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-6 py-4 font-semibold text-green-600">NT$ {{ inv.price }}</td>
+                  <td class="px-6 py-4 font-medium">{{ inv.bun }}</td>
+                  <td class="px-6 py-4 text-gray-500 text-sm">{{ inv.ctime }}</td>
+                  <td class="px-6 py-4">
+                    {% if inv.img_url %}
+                      <button type="button" class="btn btn-outline py-2 px-4 text-sm" data-preview="{{ inv.img_url }}">
+                        🖼️ 預覽
+                      </button>
+                    {% else %}
+                      <span class="text-gray-400 text-sm">無附件</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr>
+                <td colspan="8" class="text-center py-12">
+                  <div class="flex flex-col items-center gap-4">
+                    <div class="text-6xl text-blue-200"><i class="fas fa-inbox"></i></div>
+                    <div class="text-xl text-blue-700">目前沒有找到符合條件的發票記錄</div>
+                    <div class="text-sm text-blue-400">請嘗試調整查詢條件或使用圖片查詢功能</div>
+                  </div>
+                </td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 使用指南 -->
+  <div class="mt-8 grid md:grid-cols-2 gap-6">
+    <!-- 查詢技巧 -->
+    <div class="card p-6">
+      <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+        <span class="text-2xl">💡</span>
+        查詢技巧
+      </h3>
+      <div class="space-y-3 text-gray-600">
+        <div class="flex items-start gap-3">
+          <span class="text-blue-500 font-bold">1.</span>
+          <div>
+            <strong>精確查詢：</strong>選擇特定廠商和明確的日期範圍，可以快速縮小查詢結果
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-blue-500 font-bold">2.</span>
+          <div>
+            <strong>模糊查詢：</strong>使用圖片查詢功能，即使不記得確切的發票資訊也能找到相關記錄
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-blue-500 font-bold">3.</span>
+          <div>
+            <strong>批量操作：</strong>使用全選功能快速選擇多筆記錄，一次性下載所需資料
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 功能說明 -->
+    <div class="card p-6">
+      <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-3">
+        <span class="text-2xl">🔧</span>
+        功能說明
+      </h3>
+      <div class="space-y-3 text-gray-600">
+        <div class="flex items-start gap-3">
+          <span class="text-green-500">📊</span>
+          <div>
+            <strong>Excel 匯出：</strong>支援將查詢結果匯出為 Excel 格式，方便後續分析和報告
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-purple-500">📷</span>
+          <div>
+            <strong>圖片比對：</strong>使用 AI 技術分析發票圖片，自動找出相似的歷史記錄
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-orange-500">🖼️</span>
+          <div>
+            <strong>圖片預覽：</strong>點擊預覽按鈕可查看發票的原始圖片，確認資料準確性
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 常見問題 -->
+  <div class="mt-8 card p-6 bg-blue-50 border-l-4 border-blue-400">
+    <h3 class="text-xl font-bold text-blue-700 mb-6 flex items-center gap-3">
+      <i class="fas fa-question-circle mr-2 text-2xl"></i> 常見問題 Q&A
+    </h3>
+    <div class="space-y-4">
+      <details class="bg-gray-50 rounded-lg p-4 cursor-pointer">
+        <summary class="font-semibold text-gray-700 flex items-center gap-2">
+          <span class="text-blue-500">Q:</span>
+          為什麼我的查詢結果是空的？
+        </summary>
+        <div class="mt-3 text-gray-600 pl-6">
+          <strong>A:</strong> 請檢查以下幾點：
+          <ul class="list-disc ml-4 mt-2 space-y-1">
+            <li>確認選擇的日期範圍是否正確</li>
+            <li>檢查是否選擇了正確的廠商</li>
+            <li>確認「日期依據」的設定（發票日期 vs 登錄時間）</li>
+            <li>嘗試放寬查詢條件或使用「全部廠商」選項</li>
+          </ul>
+        </div>
+      </details>
+      
+      <details class="bg-gray-50 rounded-lg p-4 cursor-pointer">
+        <summary class="font-semibold text-gray-700 flex items-center gap-2">
+          <span class="text-blue-500">Q:</span>
+          圖片查詢功能如何使用？
+        </summary>
+        <div class="mt-3 text-gray-600 pl-6">
+          <strong>A:</strong> 圖片查詢使用步驟：
+          <ul class="list-disc ml-4 mt-2 space-y-1">
+            <li>點擊「選擇照片查詢」按鈕上傳發票圖片</li>
+            <li>系統會自動分析圖片內容並與資料庫比對</li>
+            <li>比對完成後會顯示相似度最高的發票記錄</li>
+            <li>建議上傳清晰、完整的發票照片以獲得最佳效果</li>
+          </ul>
+        </div>
+      </details>
+      
+      <details class="bg-gray-50 rounded-lg p-4 cursor-pointer">
+        <summary class="font-semibold text-gray-700 flex items-center gap-2">
+          <span class="text-blue-500">Q:</span>
+          如何下載查詢結果？
+        </summary>
+        <div class="mt-3 text-gray-600 pl-6">
+          <strong>A:</strong> Excel 下載步驟：
+          <ul class="list-disc ml-4 mt-2 space-y-1">
+            <li>在查詢結果中勾選需要下載的發票記錄</li>
+            <li>可使用表頭的核取方塊全選所有記錄</li>
+            <li>點擊「下載 Excel 報表」按鈕</li>
+            <li>系統會自動產生包含完整資訊的 CSV 檔案</li>
+          </ul>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- 圖片預覽模態框 -->
 <div id="imgModal" class="modal" aria-hidden="true">
   <div class="backdrop"></div>
   <div class="dialog">
@@ -169,47 +575,91 @@ document.addEventListener('DOMContentLoaded', () => {
   const downloadBtn = document.getElementById('downloadExcelBtn');
   const checkAll = document.getElementById('checkAllInvoices');
   const invoiceChecks = () => Array.from(document.querySelectorAll('.invoiceCheck'));
+  
+  // 全選功能
   if (checkAll) {
     checkAll.addEventListener('change', () => {
       invoiceChecks().forEach(chk => chk.checked = checkAll.checked);
+      updateDownloadBtn();
     });
   }
+  
+  // 監聽單選變化
+  invoiceChecks().forEach(chk => {
+    chk.addEventListener('change', updateDownloadBtn);
+  });
+  
+  // 更新下載按鈕狀態
+  function updateDownloadBtn() {
+    const checkedCount = invoiceChecks().filter(chk => chk.checked).length;
+    if (downloadBtn) {
+      if (checkedCount > 0) {
+        downloadBtn.innerHTML = `<span class="text-lg">📊</span> 下載 Excel 報表 (${checkedCount} 筆)`;
+        downloadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+      } else {
+        downloadBtn.innerHTML = '<span class="text-lg">📊</span> 下載 Excel 報表';
+        downloadBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      }
+    }
+  }
+  
+  // 下載功能
   if (downloadBtn) {
     downloadBtn.addEventListener('click', () => {
       const rows = [];
-      // 標題
-        rows.push(['發票號碼','統一編號','日期','價格','公司名稱','登入時間','類別1','類別2','類別3','類別4']);
+      // 標題行
+      rows.push(['發票號碼','統一編號','日期','價格','公司名稱','登錄時間','類別1','類別2','類別3','類別4']);
+      
+      let downloadCount = 0;
       invoiceChecks().forEach((chk, idx) => {
         if (chk.checked) {
           const tr = chk.closest('tr');
           const tds = tr.querySelectorAll('td');
-          // 取欄位
+          // 提取欄位資料
           const num = tds[1]?.textContent.trim() || '';
           const snu = tds[2]?.textContent.trim() || '';
           const date = tds[3]?.textContent.trim() || '';
           const price = tds[4]?.textContent.trim() || '';
           const bun = tds[5]?.textContent.trim() || '';
-            const ctime = tds[6]?.textContent.trim() || '';
-          // 假設四個類別資料在 inv 物件中，需後端補充
-          // 這裡用 data-* 或隱藏欄位傳遞，暫以空字串
+          const ctime = tds[6]?.textContent.trim() || '';
+          // 預留類別欄位（需後端補充）
           const cat1 = tr.dataset.cat1 || '';
           const cat2 = tr.dataset.cat2 || '';
           const cat3 = tr.dataset.cat3 || '';
           const cat4 = tr.dataset.cat4 || '';
-            rows.push([num, snu, date, price, bun, ctime, cat1, cat2, cat3, cat4]);
+          
+          rows.push([num, snu, date, price, bun, ctime, cat1, cat2, cat3, cat4]);
+          downloadCount++;
         }
       });
-      if (rows.length <= 1) { alert('請勾選要下載的發票'); return; }
+      
+      if (downloadCount === 0) { 
+        alert('請勾選要下載的發票記錄'); 
+        return; 
+      }
+      
       // 產生 CSV 檔案（Excel 可直接開啟）
-      const csv = rows.map(r => r.join(',')).join('\n');
-      const blob = new Blob(["\uFEFF"+csv], {type: "text/csv;charset=utf-8;"});
+      const csv = rows.map(r => r.map(cell => `"${cell}"`).join(',')).join('\n');
+      const blob = new Blob(["\uFEFF" + csv], {type: "text/csv;charset=utf-8;"});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = '發票下載.csv';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      a.download = `發票報表_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a); 
+      a.click(); 
+      document.body.removeChild(a);
+      
+      // 顯示下載成功訊息
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+      toast.innerHTML = `✅ 成功下載 ${downloadCount} 筆發票資料`;
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.remove();
+      }, 3000);
     });
   }
 });
+  // 日期選擇器初始化
   document.addEventListener('DOMContentLoaded', () => {
     // 清除 Litepicker 的「最近範圍」提示
     localStorage.removeItem('litepicker:recent-ranges');
@@ -228,82 +678,173 @@ document.addEventListener('DOMContentLoaded', () => {
         maxYear: new Date().getFullYear(),
         months: true,
         years: true
-      }
+      },
+      lang: 'zh-tw'
     });
 
+    // 快速日期選擇功能
     function setQuickRange(type) {
       const today = new Date();
       const y = today.getFullYear();
       const m = today.getMonth();
       let s, e;
+      
       if (type === 'this_month') {
-        s = new Date(y, m, 1); e = new Date(y, m + 1, 0);
+        s = new Date(y, m, 1); 
+        e = new Date(y, m + 1, 0);
       } else if (type === 'last_3m') {
-        e = today; s = new Date(y, m - 2, 1);
+        e = today; 
+        s = new Date(y, m - 2, 1);
       } else if (type === 'ytd') {
-        s = new Date(y, 0, 1); e = today;
+        s = new Date(y, 0, 1); 
+        e = today;
       } else if (type === 'clear') {
-        dr.value = ''; picker.clearSelection(); return;
+        dr.value = ''; 
+        picker.clearSelection(); 
+        return;
       }
+      
       const pad = n => String(n).padStart(2, '0');
       const fmt = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       dr.value = `${fmt(s)} - ${fmt(e)}`;
       picker.setDateRange(s, e, true);
     }
 
+    // 綁定快速選擇按鈕
     document.querySelectorAll('button.quick').forEach(btn => {
-      btn.addEventListener('click', () => setQuickRange(btn.dataset.range));
+      btn.addEventListener('click', () => {
+        // 移除其他按鈕的選中狀態
+        document.querySelectorAll('button.quick').forEach(b => {
+          b.classList.remove('bg-blue-500', 'text-white');
+          b.classList.add('bg-white', 'text-gray-600');
+        });
+        
+        // 添加當前按鈕的選中狀態
+        if (btn.dataset.range !== 'clear') {
+          btn.classList.remove('bg-white', 'text-gray-600');
+          btn.classList.add('bg-blue-500', 'text-white');
+        }
+        
+        setQuickRange(btn.dataset.range);
+      });
     });
   });
-  // --- 用照片查詢：好看 + 自動送出 ---
-const photoInput  = document.getElementById('photoInput');
-const photoBtn    = document.getElementById('photoBtn');
-const photoName   = document.getElementById('photoName');
-const photoSubmit = document.getElementById('photoSubmit');
-const photoForm   = document.getElementById('photoSearch');
+  // 照片查詢功能
+  const photoInput  = document.getElementById('photoInput');
+  const photoBtn    = document.getElementById('photoBtn');
+  const photoName   = document.getElementById('photoName');
+  const photoSubmit = document.getElementById('photoSubmit');
+  const photoForm   = document.getElementById('photoSearch');
 
-if (photoBtn && photoInput) {
-  photoBtn.addEventListener('click', () => photoInput.click());
-  photoInput.addEventListener('change', () => {
-    const files = photoInput.files || [];
-    if (files.length > 0) {
-      photoName.textContent = files.length === 1 ? files[0].name : `已選擇 ${files.length} 張`;
-      photoSubmit.disabled = false;
-      photoForm.submit(); // 選完自動送出；若想手動就把這行註解掉
-    } else {
-      photoName.textContent = '未選擇檔案';
-      photoSubmit.disabled = true;
+  if (photoBtn && photoInput) {
+    photoBtn.addEventListener('click', () => photoInput.click());
+    
+    photoInput.addEventListener('change', () => {
+      const files = photoInput.files || [];
+      if (files.length > 0) {
+        if (files.length === 1) {
+          photoName.textContent = `📄 ${files[0].name}`;
+        } else {
+          photoName.textContent = `📂 已選擇 ${files.length} 張照片`;
+        }
+        photoSubmit.disabled = false;
+        photoSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+        
+        // 顯示上傳進度提示
+        const uploadHint = document.createElement('div');
+        uploadHint.className = 'text-sm text-green-600 mt-2 flex items-center gap-2';
+        uploadHint.innerHTML = '✅ 照片已準備就緒，點擊「開始比對」進行分析';
+        
+        const existingHint = photoForm.querySelector('.text-green-600');
+        if (existingHint) existingHint.remove();
+        photoForm.appendChild(uploadHint);
+        
+        // 自動送出（可選）
+        // photoForm.submit();
+      } else {
+        photoName.textContent = '📂 未選擇檔案';
+        photoSubmit.disabled = true;
+        photoSubmit.classList.add('opacity-50', 'cursor-not-allowed');
+        
+        const existingHint = photoForm.querySelector('.text-green-600');
+        if (existingHint) existingHint.remove();
+      }
+    });
+    
+    // 拖拽上傳功能
+    const photoSearchDiv = document.querySelector('.photo-search');
+    
+    photoSearchDiv.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      photoSearchDiv.classList.add('border-purple-500', 'bg-purple-50');
+    });
+    
+    photoSearchDiv.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      photoSearchDiv.classList.remove('border-purple-500', 'bg-purple-50');
+    });
+    
+    photoSearchDiv.addEventListener('drop', (e) => {
+      e.preventDefault();
+      photoSearchDiv.classList.remove('border-purple-500', 'bg-purple-50');
+      
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        photoInput.files = files;
+        photoInput.dispatchEvent(new Event('change'));
+      }
+    });
+  }
+
+  // 圖片預覽模態框功能
+  const modal    = document.getElementById('imgModal');
+  const modalImg = document.getElementById('modalImg');
+  const closeBtn = modal?.querySelector('.close');
+
+  function openModal(url) {
+    if (!modal) return;
+    modalImg.src = url;
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden'; // 防止背景滾動
+  }
+  
+  function closeModal() {
+    if (!modal) return;
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+    modalImg.src = '';
+    document.body.style.overflow = ''; // 恢復滾動
+  }
+
+  // 綁定每個「預覽」按鈕
+  document.addEventListener('click', (e) => {
+    if (e.target.hasAttribute('data-preview') || e.target.parentElement.hasAttribute('data-preview')) {
+      const btn = e.target.hasAttribute('data-preview') ? e.target : e.target.parentElement;
+      openModal(btn.dataset.preview);
     }
   });
-}
 
-// --- 圖片預覽 Modal ---
-const modal    = document.getElementById('imgModal');
-const modalImg = document.getElementById('modalImg');
-const closeBtn = modal?.querySelector('.close');
+  // 關閉行為：按 ×、按背景、按 Esc
+  closeBtn?.addEventListener('click', closeModal);
+  modal?.querySelector('.backdrop')?.addEventListener('click', closeModal);
+  document.addEventListener('keydown', (e) => { 
+    if (e.key === 'Escape') closeModal(); 
+  });
 
-function openModal(url){
-  if (!modal) return;
-  modalImg.src = url;
-  modal.classList.add('show');
-  modal.setAttribute('aria-hidden', 'false');
-}
-function closeModal(){
-  if (!modal) return;
-  modal.classList.remove('show');
-  modal.setAttribute('aria-hidden', 'true');
-  modalImg.src = '';
-}
-
-// 綁定每個「預覽」按鈕
-document.querySelectorAll('[data-preview]').forEach(btn=>{
-  btn.addEventListener('click', ()=> openModal(btn.dataset.preview));
-});
-
-// 關閉行為：按 ×、按背景、按 Esc
-closeBtn?.addEventListener('click', closeModal);
-modal?.querySelector('.backdrop')?.addEventListener('click', closeModal);
-document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+  // 表格行懸停效果
+  const tableRows = document.querySelectorAll('.enhanced-table tbody tr');
+  tableRows.forEach(row => {
+    row.addEventListener('mouseenter', () => {
+      row.style.transform = 'scale(1.01)';
+      row.style.zIndex = '1';
+    });
+    
+    row.addEventListener('mouseleave', () => {
+      row.style.transform = '';
+      row.style.zIndex = '';
+    });
+  });
 
 </script>
 {% endblock %}
